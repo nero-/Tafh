@@ -82,6 +82,19 @@ zig build jni -Dtarget=aarch64-linux-android
 
 That copies `libchuchu_jni.so` into `app/src/main/jniLibs/arm64-v8a/`.
 
+The encrypted backup container is a separate Rust library. Build it into the same
+folder, otherwise backup export/import fails at runtime only:
+
+```sh
+rustup target add aarch64-linux-android
+cargo install cargo-ndk   # once
+cd rust && cargo ndk -t arm64-v8a -t x86_64 \
+    -o ../android/app/src/main/jniLibs build --release -p chuchu-backup
+```
+
+`make build` runs both native builds; it needs `ANDROID_NDK_HOME`, Zig 0.15.2 and
+`cargo-ndk` on PATH.
+
 3. From android studio run 
 ```sh
 ./gradlew assembleDebug

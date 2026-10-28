@@ -89,13 +89,22 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Nightly version: ${VERSION_NAME} (code=${VERSION_CODE}, base=${VERSION}, offset=${OFFSET})"
 
-      - name: build chuchu_jni
+      - name: build native libraries
         run: |
           nix develop -c bash -c '
             set -e
             cd zig-src
             zig build -Doptimize=ReleaseSmall -Dtarget=aarch64-linux-android.24 jni
           '
+      # The encrypted backup container lives in Rust now; without this the APK
+      # ships no libchuchu_backup.so and backup export/import fails on device.
+      - name: build chuchu_backup (Rust)
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
+          cd rust
+          cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p chuchu-backup
 
       - name: generate release key
         run: |

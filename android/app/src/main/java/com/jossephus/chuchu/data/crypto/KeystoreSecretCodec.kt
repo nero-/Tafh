@@ -7,7 +7,6 @@ import android.util.Base64
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
-import java.security.SecureRandom
 import java.security.UnrecoverableKeyException
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
@@ -18,9 +17,10 @@ import javax.crypto.spec.GCMParameterSpec
 /**
  * AES-256-GCM [SecretCodec] backed by a non-exportable key in `AndroidKeyStore`.
  *
- * Every ciphertext is `v1:` + base64(12-byte random IV || ciphertext || 128-bit tag). The IV is
- * random per call (not derived), so encrypting the same password twice yields different rows and no
- * plaintext equality can be inferred from the database.
+ * Every ciphertext is `v1:` + base64(12-byte IV || ciphertext || 128-bit tag). The IV is generated
+ * by the keystore for each encryption (caller-supplied IVs are rejected by AndroidKeyStore unless
+ * the key opts in), so encrypting the same password twice yields different rows and no plaintext
+ * equality can be inferred from the database.
  *
  * The key does **not** require user authentication: the app lock is a UX gate, not a cryptographic
  * one, and background code paths (widget/notification triggered connects, backup export) read these
@@ -43,14 +43,12 @@ class KeystoreSecretCodec(private val keyAlias: String = DEFAULT_KEY_ALIAS) : Se
         KeyStore.getInstance(ANDROID_KEYSTORE_PROVIDER).apply { load(null) }
     }
 
-    private val random = SecureRandom()
-
     override fun encrypt(plaintext: String): String {
         // Nothing to protect, and blank credentials must not depend on the keystore.
         if (plaintext.isEmpty()) return ""
 
-        val iv = ByteArray(IV_BYTES).also(random::nextBytes)
-        val body = iv + encryptOrRotate(iv, plaintext.toByteArray(Charsets.UTF_8))
+        val (iv, ciphertext) = encryptOrRotate(plaintext.toByteArray(Charsets.UTF_8))
+        val body = iv + ciphertext
         return SECRET_ENVELOPE_PREFIX + Base64.encodeToString(body, Base64.NO_WRAP)
     }
 
@@ -88,22 +86,27 @@ class KeystoreSecretCodec(private val keyAlias: String = DEFAULT_KEY_ALIAS) : Se
         }
     }
 
-    private fun encryptOrRotate(iv: ByteArray, plaintext: ByteArray): ByteArray =
+    /** Encrypts and returns the iv the keystore chose plus ciphertext||tag. */
+    private fun encryptOrRotate(plaintext: ByteArray): Pair<ByteArray, ByteArray> =
         try {
-            doEncrypt(iv, plaintext)
+            doEncrypt(plaintext)
         } catch (_: KeyPermanentlyInvalidatedException) {
             rotateKey()
-            doEncrypt(iv, plaintext)
+            doEncrypt(plaintext)
         } catch (_: UnrecoverableKeyException) {
             rotateKey()
-            doEncrypt(iv, plaintext)
+            doEncrypt(plaintext)
         }
 
-    private fun doEncrypt(iv: ByteArray, plaintext: ByteArray): ByteArray {
+    private fun doEncrypt(plaintext: ByteArray): Pair<ByteArray, ByteArray> {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey(), GCMParameterSpec(TAG_BITS, iv))
+        // No IV is supplied: AndroidKeyStore requires the IV to come from the keystore
+        // (`Caller-provided IV not permitted`), so it is read back after init and stored
+        // alongside the ciphertext for decryption.
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val iv = cipher.iv
         // GCM appends the authentication tag to the ciphertext, so this is ciphertext||tag.
-        return cipher.doFinal(plaintext)
+        return iv to cipher.doFinal(plaintext)
     }
 
     private fun getOrCreateKey(): SecretKey {

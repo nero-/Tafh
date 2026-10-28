@@ -14,6 +14,8 @@ SHELL := /bin/bash
 ZIG ?= zig
 # Overridable so CI can supply a downloaded jar: make fmt-check KTFMT="java -jar /tmp/ktfmt.jar"
 KTFMT ?= ktfmt
+CARGO_NDK ?= cargo ndk
+RUST_DIR := rust
 KTLINT ?= ktlint
 ANDROID_DIR := android
 ZIG_DIR := zig-src
@@ -42,14 +44,24 @@ check-ndk:
 		exit 1; \
 	fi
 
+check-cargo:
+	@command -v $(CARGO_NDK) >/dev/null 2>&1 || { \
+		echo "error: cargo-ndk is not installed; run 'cargo install cargo-ndk' (needed for the Rust backup library)" >&2; \
+		exit 1; \
+	}
+
 check-kt-sources:
 	@if [ "$(KT_COUNT)" -eq 0 ]; then \
 		echo "error: no Kotlin sources found under $(ANDROID_DIR); run make from the repository root" >&2; \
 		exit 1; \
 	fi
 
-build: check-zig check-ndk
+build: check-zig check-ndk check-cargo
 	cd $(ZIG_DIR) && $(ZIG) build -Doptimize=ReleaseSmall jni
+# The backup container is Rust now; Gradle packages whatever .so files exist in
+# jniLibs, so this must run or backup export/import fails at runtime only.
+	cd $(RUST_DIR) && $(CARGO_NDK) -t arm64-v8a -t x86_64 \
+		-o ../$(ANDROID_DIR)/app/src/main/jniLibs build --release -p chuchu-backup
 
 app:
 	cd $(ANDROID_DIR) && $(GRADLEW) assembleDebug installDebug
