@@ -72,8 +72,6 @@ jobs:
   format:
     name: Format checks
     runs-on: ubuntu-latest
-    env:
-      KTFMT_VERSION: "0.54"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,10 +94,19 @@ jobs:
       # newlines and expression bodies, so gating on both would gate on a
       # contradiction. `make lint` stays available but is advisory.
       - name: Install ktfmt
+        env:
+          # Pinned exactly: formatting output differs between ktfmt releases, so the
+          # gate must use the version the tree was formatted with. (0.54 lives at
+          # facebook/ktfmt; the project moved to Kotlin/ktfmt at 0.65.)
+          KTFMT_VERSION: "0.54"
+          KTFMT_REPO: "facebook/ktfmt"
+          KTFMT_ASSET: "ktfmt-0.54-jar-with-dependencies.jar"
         run: |
           set -euo pipefail
-          curl -sSL -o /tmp/ktfmt.jar \
-            "https://github.com/facebook/ktfmt/releases/download/${KTFMT_VERSION}/ktfmt-${KTFMT_VERSION}-jar-with-dependencies.jar"
+          curl -fsSL -o /tmp/ktfmt.jar \
+            "https://github.com/${KTFMT_REPO}/releases/download/v${KTFMT_VERSION}/${KTFMT_ASSET}"
+          # Fail here, not at the format step, if the download is not a usable jar.
+          unzip -tqq /tmp/ktfmt.jar >/dev/null
 
       - name: Check Kotlin formatting
         run: make fmt-check KTFMT="java -jar /tmp/ktfmt.jar"
