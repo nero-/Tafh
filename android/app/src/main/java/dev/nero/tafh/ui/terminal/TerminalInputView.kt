@@ -265,22 +265,21 @@ class TerminalInputView(context: Context) : EditText(context) {
             view.emitTerminalText(source, text.replace('\n', '\r'))
         }
 
-        /**
-         * Length in code points of the active composing region.
-         *
-         * The mirror holds only uncommitted text, so this is exactly what the terminal has never
-         * seen. Counting code points (not UTF-16 units) keeps a surrogate pair a single character.
-         */
-        private fun composingCodePointCount(): Int {
+        // Code points of the mirror on each side of the IME cursor. The mirror holds only
+        // uncommitted text, so these are exactly what the terminal has never seen. Counting code
+        // points (not UTF-16 units) keeps a surrogate pair a single character.
+        private fun composingCodePointsBeforeCursor(): Int {
             val editable = getEditable()
             if (editable.isEmpty()) return 0
-            val start = BaseInputConnection.getComposingSpanStart(editable)
-            val end = BaseInputConnection.getComposingSpanEnd(editable)
-            val from = minOf(start, end)
-            val to = maxOf(start, end)
-            if (from < 0 || to <= from)
-                return Character.codePointCount(editable, 0, editable.length)
-            return Character.codePointCount(editable, from, to.coerceAtMost(editable.length))
+            val cursor = Selection.getSelectionStart(editable).coerceIn(0, editable.length)
+            return Character.codePointCount(editable, 0, cursor)
+        }
+
+        private fun composingCodePointsAfterCursor(): Int {
+            val editable = getEditable()
+            if (editable.isEmpty()) return 0
+            val cursor = Selection.getSelectionStart(editable).coerceIn(0, editable.length)
+            return Character.codePointCount(editable, cursor, editable.length)
         }
 
         /**
@@ -292,11 +291,15 @@ class TerminalInputView(context: Context) : EditText(context) {
          * after.
          */
         private fun emitDelete(source: String, beforeLength: Int, afterLength: Int) {
-            val composed = if (composing) composingCodePointCount() else 0
+            // Only the composing text on the side being deleted can be cancelled. Using the
+            // whole composition length for both directions swallowed a forward delete that
+            // had nothing composed after the cursor.
+            val composedBefore = if (composing) composingCodePointsBeforeCursor() else 0
+            val composedAfter = if (composing) composingCodePointsAfterCursor() else 0
             val requestedBefore = beforeLength.coerceAtLeast(0)
             val requestedAfter = afterLength.coerceAtLeast(0)
-            val terminalBefore = requestedBefore - minOf(requestedBefore, composed)
-            val terminalAfter = requestedAfter - minOf(requestedAfter, composed)
+            val terminalBefore = requestedBefore - minOf(requestedBefore, composedBefore)
+            val terminalAfter = requestedAfter - minOf(requestedAfter, composedAfter)
             dropMirror(source)
 
             repeat(terminalBefore) { view.emitBackspaceText(source) }

@@ -227,7 +227,9 @@ class TerminalSessionEngine(
         val screenHeight: Int,
     )
 
-    private var pendingResize: ResizeRequest? = null
+    // Written from the main thread (canvas size callbacks), read/cleared on the
+    // dispatcher lane: @Volatile plus atomic capture-and-clear below.
+    @Volatile private var pendingResize: ResizeRequest? = null
     private var resizeJob: Job? = null
 
     private val nativeVersion =
@@ -533,9 +535,25 @@ class TerminalSessionEngine(
         resizeJob =
             scope.launch(dispatcher) {
                 delay(RESIZE_SETTLE_MS)
-                val settled = pendingResize ?: return@launch
-                pendingResize = null
+                // Capture and clear atomically: a size change landing between the read
+                // and the clear would otherwise be dropped, leaving the PTY at the old
+                // size while the canvas had already grown (or shrunk).
+                val settled =
+                    synchronized(this@TerminalSessionEngine) {
+                        val current = pendingResize
+                        pendingResize = null
+                        current
+                    } ?: return@launch
                 applyResize(settled)
+                // A newer size arrived while this one was being applied; apply that too
+                // rather than waiting for the next discrete change.
+                val followUp =
+                    synchronized(this@TerminalSessionEngine) {
+                        val current = pendingResize
+                        pendingResize = null
+                        current
+                    }
+                if (followUp != null) applyResize(followUp)
             }
     }
 

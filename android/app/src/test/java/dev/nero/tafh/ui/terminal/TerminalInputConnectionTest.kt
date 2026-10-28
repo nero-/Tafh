@@ -238,4 +238,30 @@ class TerminalInputConnectionTest {
         assertEquals("a", emitted.toString())
         assertEquals("", mirror())
     }
+
+    @Test
+    fun `forward delete inside a composition is not swallowed`() {
+        val conn = connection()
+
+        // Composition with the caret after all three characters: nothing is composed after it,
+        // so a forward delete must still reach the terminal.
+        conn.setComposingText("\u304b\u3093", 2)
+        assertEquals("", emitted.toString())
+
+        conn.deleteSurroundingText(0, 1)
+        assertEquals("\u001b[3~", emitted.toString())
+    }
+
+    @Test
+    fun `backspace inside a composition is cancelled but outside text is not`() {
+        val conn = connection()
+
+        conn.setComposingText("\u304b\u3093", 2)
+        conn.deleteSurroundingText(1, 0)
+        assertEquals("", emitted.toString())
+
+        conn.commitText("ab", 2)
+        conn.deleteSurroundingText(1, 0)
+        assertEquals("ab\u007f", emitted.toString())
+    }
 }

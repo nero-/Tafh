@@ -143,39 +143,53 @@ fun KeyboardAccessoryBar(
         // Every key draws a 30dp pill but carries a 48dp touch target, so each row occupies 48dp
         // (30dp pill + 9dp invisible padding above and below). The glyphs and their gaps are
         // unchanged; only the invisible padding makes the bar taller.
-        FlowRow(
+        //
+        // The ⌘/⚙ actions live OUTSIDE the FlowRow on purpose: FlowRow silently drops items that
+        // do not fit within maxLines, and these two are the only in-terminal route to the file
+        // browser and settings, so they must never be the ones that disappear.
+        Row(
             modifier =
                 Modifier.fillMaxWidth()
                     .padding(horizontal = horizontalPadding, vertical = verticalPadding),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            maxLines = 2,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            entries.forEach { entry ->
-                AccessoryEntry(
-                    entry = entry,
-                    expanded = expandedGroupId == entry.id,
-                    modifierState = modifierState,
-                    onAction = onAction,
-                    onToggleGroup = { id ->
-                        expandedGroupId = if (expandedGroupId == id) null else id
-                    },
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                maxLines = 2,
+            ) {
+                entries.forEach { entry ->
+                    AccessoryEntry(
+                        entry = entry,
+                        expanded = expandedGroupId == entry.id,
+                        modifierState = modifierState,
+                        onAction = onAction,
+                        onToggleGroup = { id ->
+                            expandedGroupId = if (expandedGroupId == id) null else id
+                        },
+                        buttonHeight = buttonHeight,
+                        buttonPadding = buttonPadding,
+                    )
+                }
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilesButton(
+                    onTafhKey = onTafhKey,
+                    tafhKeyActive = tafhKeyActive,
+                    onOpenFiles = onOpenFiles,
+                    buttonHeight = buttonHeight,
+                    buttonPadding = buttonPadding,
+                )
+                SettingsButton(
+                    onSettings = onSettings,
                     buttonHeight = buttonHeight,
                     buttonPadding = buttonPadding,
                 )
             }
-            FilesButton(
-                onTafhKey = onTafhKey,
-                tafhKeyActive = tafhKeyActive,
-                onOpenFiles = onOpenFiles,
-                buttonHeight = buttonHeight,
-                buttonPadding = buttonPadding,
-            )
-            SettingsButton(
-                onSettings = onSettings,
-                buttonHeight = buttonHeight,
-                buttonPadding = buttonPadding,
-            )
         }
     }
 }
