@@ -120,28 +120,34 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           set -euo pipefail
-          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+          RAW="${KEYSTORE_BASE64:-}"
+          if [ -z "$RAW" ]; then
             echo "::error::KEYSTORE_BASE64 is not set. Add KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD (README, 'Signing')."
             exit 1
           fi
-          # Secrets are frequently pasted with wrapping, CRLF line endings or stray
-          # quotes; none of those are valid base64 and all of them fail to decode.
-          CLEAN="$(printf '%s' "${KEYSTORE_BASE64}" | tr -d '[:space:]' | tr -d '"' | tr -d "'")"
-          if ! printf '%s' "$CLEAN" | base64 -d > android/app/key.jks 2>/dev/null; then
-            echo "::error::KEYSTORE_BASE64 is not valid base64 after stripping whitespace/quotes. Re-create it with: base64 -w0 release.jks | tr -d '\n'"
+          # A pasted secret can arrive quoted, wrapped across lines, as a data: URI,
+          # with CRLF, or with literal backslash-n escapes. Normalise all of those
+          # before decoding, then verify the result really is a keystore.
+          S="$RAW"
+          S="${S#\"}"; S="${S%\"}"; S="${S#\'}"; S="${S%\'}"
+          S="${S#data:*base64,}"
+          S="$(printf '%s' "$S" | sed 's/\\n//g')"
+          S="$(printf '%s' "$S" | tr -- '-_' '+/')"
+          S="$(printf '%s' "$S" | tr -cd 'A-Za-z0-9+/=')"
+          if ! printf '%s' "$S" | base64 -d > android/app/key.jks 2>/dev/null; then
+            echo "::error::KEYSTORE_BASE64 does not decode as base64 (length ${#S}). Re-create it with: base64 -w0 release.jks | tr -d '\n'"
             exit 1
           fi
           SIZE=$(wc -c < android/app/key.jks)
           if [ "$SIZE" -lt 512 ]; then
-            echo "::error::Decoded keystore is only ${SIZE} bytes, which cannot be a keystore. Did you paste a path instead of the file contents?"
+            echo "::error::Decoded keystore is only ${SIZE} bytes; that cannot be a keystore. Did you paste a file path instead of its contents?"
             exit 1
           fi
-          # JKS (FEEDFEED) or PKCS12 (ASN.1 SEQUENCE, 0x30).
           MAGIC=$(od -An -tx1 -N4 android/app/key.jks | tr -d ' \n')
           case "$MAGIC" in
             feedfeed*|30*) : ;;
             *)
-              echo "::error::Decoded file does not look like a keystore (magic ${MAGIC})."
+              echo "::error::Decoded file does not look like a JKS/PKCS12 keystore (magic ${MAGIC})."
               exit 1
               ;;
           esac
