@@ -168,10 +168,24 @@ jobs:
               exit 1
               ;;
           esac
-          # Final proof: the credentials must actually open this keystore.
+          # Final proof, in two parts so the error names the secret to fix.
+          if ! keytool -list -keystore android/app/key.jks -storepass "$KEYSTORE_PASSWORD" \
+                 >/dev/null 2>&1; then
+            echo "::error::The keystore decoded, but KEYSTORE_PASSWORD does not open it. Re-check that secret (it is the storepass, not the key password)."
+            exit 1
+          fi
+          ALIASES=$(keytool -list -keystore android/app/key.jks -storepass "$KEYSTORE_PASSWORD" 2>/dev/null \
+                    | sed -n 's/^\([^,]*\),.*/\1/p' | tr -d ' ' | paste -sd, -)
+          case ",${ALIASES}," in
+            *",${KEY_ALIAS},"*) : ;;
+            *)
+              echo "::error::KEY_ALIAS='${KEY_ALIAS}' is not in this keystore. Aliases present: ${ALIASES:-<none>}. Set KEY_ALIAS to one of those."
+              exit 1
+              ;;
+          esac
           if ! keytool -list -keystore android/app/key.jks -storepass "$KEYSTORE_PASSWORD" \
                  -alias "$KEY_ALIAS" >/dev/null 2>&1; then
-            echo "::error::The keystore decoded, but KEYSTORE_PASSWORD / KEY_ALIAS do not open it. Check those two secrets."
+            echo "::error::Alias '${KEY_ALIAS}' exists but cannot be read with KEYSTORE_PASSWORD."
             exit 1
           fi
           echo "keystore OK (${SIZE} bytes, magic ${MAGIC}, alias ${KEY_ALIAS} present)"
