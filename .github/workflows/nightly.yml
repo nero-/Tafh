@@ -98,19 +98,19 @@ jobs:
           '
       # The encrypted backup container lives in Rust now; without this the APK
       # ships no libtafh_backup.so and backup export/import fails on device only.
-      # Rust comes from the devshell; cargo-ndk is not packaged in nixpkgs.
+      # This runs on the runner's rustup toolchain, NOT inside `nix develop`: only
+      # rustup can install the Android rust-std targets, and nixpkgs rustc has none.
       - name: build tafh_backup (Rust)
         run: |
           set -euo pipefail
-          nix develop -c bash -c '
-            set -e
-            rustup target add aarch64-linux-android 2>/dev/null || rustc --print target-list | grep -qx aarch64-linux-android
-            if ! command -v cargo-ndk >/dev/null 2>&1; then
-              cargo install cargo-ndk --locked
-            fi
-            cd rust
-            cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p tafh-backup
-          '
+          NDK_HOME="$(nix develop -c printenv ANDROID_NDK_HOME)"
+          export ANDROID_NDK_HOME="$NDK_HOME"
+          rustup target add aarch64-linux-android
+          if ! command -v cargo-ndk >/dev/null 2>&1; then
+            cargo install cargo-ndk --locked
+          fi
+          cd rust
+          cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p tafh-backup
 
       - name: generate release key
         run: |

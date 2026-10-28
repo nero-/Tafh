@@ -38,11 +38,9 @@ with pkgs;
       ktfmt
       ktlint
 
-      # The encrypted backup container is a Rust cdylib (see rust/tafh-backup).
-      # cargo-ndk is not in nixpkgs, so the build step installs it with cargo;
-      # rustc/cargo still have to come from here.
-      rustc
-      cargo
+      # NOTE: the Rust backup crate is built with a rustup toolchain, deliberately
+      # not with nixpkgs rustc: only rustup can add the Android rust-std targets
+      # (aarch64-linux-android). Nix's rustc would shadow it on PATH.
 
       nodejs
       pnpm
