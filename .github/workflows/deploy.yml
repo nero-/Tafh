@@ -25,6 +25,10 @@ jobs:
       - name: Build docs
         run: nix develop -c sh -c 'cd docs && pnpm install && pnpm run generate'
 
+      # No `cname` unless the repository defines a custom domain. GitHub Pages then
+      # serves the site at <owner>.github.io/<repo>, which is always correct; the
+      # previous value pointed at a domain this fork does not own and would have
+      # broken the deploy.
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -32,4 +36,4 @@ jobs:
           publish_dir: ./docs/.output/public
           publish_branch: gh-pages
           destination_dir: .
-          cname: tafh.jossephus.et
+          cname: ${{ vars.DOCS_CUSTOM_DOMAIN }}
