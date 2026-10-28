@@ -35,6 +35,7 @@ import com.jossephus.chuchu.service.terminal.TabSession
 import com.jossephus.chuchu.ui.components.ChuButton
 import com.jossephus.chuchu.ui.components.ChuButtonVariant
 import com.jossephus.chuchu.ui.components.ChuText
+import com.jossephus.chuchu.ui.components.minimumInteractiveComponentSize
 import com.jossephus.chuchu.ui.theme.ChuColors
 import com.jossephus.chuchu.ui.theme.ChuTypography
 import kotlin.math.roundToInt
@@ -72,7 +73,8 @@ fun TerminalTabStrip(
     val colors = ChuColors.current
     val typography = ChuTypography.current
     val scrollState = rememberScrollState()
-    val trailingActionWidth = if (tabs.isNotEmpty()) 72.dp else 40.dp
+    // Both trailing actions keep a 48dp touch target (48 + 4 + 48) even though they draw 32dp.
+    val trailingActionWidth = if (tabs.isNotEmpty()) 100.dp else 48.dp
     val tabOffsets = remember { mutableStateMapOf<String, Int>() }
     val rowRootLeft = remember { mutableStateOf(0) }
     val titles =
@@ -97,7 +99,10 @@ fun TerminalTabStrip(
             modifier
                 .fillMaxWidth()
                 .background(colors.surfaceVariant)
-                .padding(start = 4.dp, end = 6.dp, top = 3.dp, bottom = 5.dp)
+                // No vertical padding: the 48dp-tall tab/action touch targets define the strip's
+                // height, and their invisible 8dp of padding above/below each 32dp drawn box keeps
+                // the same breathing room (48 = 8 + 32 + 8).
+                .padding(start = 4.dp, end = 6.dp)
     ) {
         Row(
             modifier =
@@ -124,39 +129,46 @@ fun TerminalTabStrip(
 
                 Box(
                     modifier =
-                        Modifier.onGloballyPositioned { coords ->
-                                tabOffsets[tab.id] =
-                                    coords.localToRoot(Offset.Zero).x.roundToInt() -
-                                        rowRootLeft.value + scrollState.value
-                            }
-                            .semantics { contentDescription = label }
-                            .defaultMinSize(minHeight = 32.dp)
-                            .widthIn(min = 44.dp, max = 160.dp)
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                            .background(
-                                if (isActive) colors.accent.copy(alpha = 0.16f)
-                                else Color.Transparent
-                            )
+                        Modifier.semantics { contentDescription = label }
                             .clickable { onTabSelected(tab.id) }
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                            // 48dp touch target; the drawn tab stays 32dp tall inside it.
+                            .minimumInteractiveComponentSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    ChuText(
-                        text = label,
-                        style = typography.labelSmall,
-                        color = if (isActive) colors.accent else colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (isActive) {
-                        Box(
-                            modifier =
-                                Modifier.align(Alignment.BottomCenter)
-                                    .padding(start = 2.dp, end = 2.dp, bottom = 1.dp)
-                                    .fillMaxWidth()
-                                    .height(1.dp)
-                                    .background(colors.accent)
+                    Box(
+                        modifier =
+                            Modifier.onGloballyPositioned { coords ->
+                                    tabOffsets[tab.id] =
+                                        coords.localToRoot(Offset.Zero).x.roundToInt() -
+                                            rowRootLeft.value + scrollState.value
+                                }
+                                .defaultMinSize(minHeight = 32.dp)
+                                .widthIn(min = 44.dp, max = 160.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                .background(
+                                    if (isActive) colors.accent.copy(alpha = 0.16f)
+                                    else Color.Transparent
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ChuText(
+                            text = label,
+                            style = typography.labelSmall,
+                            color = if (isActive) colors.accent else colors.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
+                        if (isActive) {
+                            Box(
+                                modifier =
+                                    Modifier.align(Alignment.BottomCenter)
+                                        .padding(start = 2.dp, end = 2.dp, bottom = 1.dp)
+                                        .fillMaxWidth()
+                                        .height(1.dp)
+                                        .background(colors.accent)
+                            )
+                        }
                     }
                 }
             }
@@ -170,9 +182,11 @@ fun TerminalTabStrip(
             if (tabs.isNotEmpty()) {
                 ChuButton(
                     onClick = onOpenManager,
-                    modifier = Modifier.defaultMinSize(minHeight = 32.dp, minWidth = 32.dp),
+                    // 48dp touch target around the 32dp drawn ghost button.
+                    modifier = Modifier.defaultMinSize(minWidth = 32.dp),
                     variant = ChuButtonVariant.Ghost,
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                    minHeight = 32.dp,
                     contentDescription = "all tabs",
                 ) {
                     ChuText(
@@ -186,9 +200,11 @@ fun TerminalTabStrip(
             Box {
                 ChuButton(
                     onClick = onAddTab,
-                    modifier = Modifier.defaultMinSize(minHeight = 32.dp, minWidth = 32.dp),
+                    // 48dp touch target around the 32dp drawn ghost button.
+                    modifier = Modifier.defaultMinSize(minWidth = 32.dp),
                     variant = ChuButtonVariant.Ghost,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    minHeight = 32.dp,
                     contentDescription = "new connection",
                 ) {
                     ChuText("+", style = typography.label, color = colors.accent)

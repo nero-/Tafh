@@ -25,9 +25,7 @@ class KeyMapperTest {
     @Test
     fun `volume keys stay null even with modifiers held`() {
         val metaState = KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
-        assertNull(
-            KeyMapper.map(KeyEvent.KEYCODE_VOLUME_UP, codepoint = 0, metaState = metaState)
-        )
+        assertNull(KeyMapper.map(KeyEvent.KEYCODE_VOLUME_UP, codepoint = 0, metaState = metaState))
         assertNull(
             KeyMapper.map(KeyEvent.KEYCODE_VOLUME_DOWN, codepoint = 0, metaState = metaState)
         )

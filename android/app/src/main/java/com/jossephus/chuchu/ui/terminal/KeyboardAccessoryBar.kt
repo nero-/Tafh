@@ -45,6 +45,7 @@ import com.jossephus.chuchu.ui.components.ChuButton
 import com.jossephus.chuchu.ui.components.ChuButtonSurface
 import com.jossephus.chuchu.ui.components.ChuButtonVariant
 import com.jossephus.chuchu.ui.components.ChuText
+import com.jossephus.chuchu.ui.components.minimumInteractiveComponentSize
 import com.jossephus.chuchu.ui.theme.ChuColors
 import com.jossephus.chuchu.ui.theme.ChuSymbolsFontFamily
 import com.jossephus.chuchu.ui.theme.ChuTypography
@@ -52,6 +53,15 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val INITIAL_REPEAT_DELAY_MS = 400L
 private const val REPEAT_INTERVAL_MS = 50L
+
+/**
+ * Width of each accessory key's invisible touch area.
+ *
+ * The accessibility minimum is 48dp, but the bar packs up to 13 keys into two FlowRow lines on a
+ * narrow (folded) screen. Forcing 48dp width overflows the row and drops the trailing keys off the
+ * layout entirely, which is worse than a slightly narrow target; height still reaches 48dp.
+ */
+private val ACCESSORY_TOUCH_WIDTH: Dp = 44.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -65,7 +75,9 @@ fun KeyboardAccessoryBar(
     onOpenFiles: (() -> Unit)? = null,
     useSingleRow: Boolean = false,
     horizontalPadding: Dp = 8.dp,
-    verticalPadding: Dp = 6.dp,
+    // Each key's 48dp touch target already includes 9dp of invisible padding above and below its
+    // 30dp glyph pill, so no outer vertical padding is needed to keep the glyphs breathing.
+    verticalPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     val buttonHeight = 30.dp
@@ -128,6 +140,9 @@ fun KeyboardAccessoryBar(
             return
         }
 
+        // Every key draws a 30dp pill but carries a 48dp touch target, so each row occupies 48dp
+        // (30dp pill + 9dp invisible padding above and below). The glyphs and their gaps are
+        // unchanged; only the invisible padding makes the bar taller.
         FlowRow(
             modifier =
                 Modifier.fillMaxWidth()
@@ -246,7 +261,9 @@ private fun GroupButton(
     ChuButton(
         onClick = onToggle,
         variant = if (expanded) ChuButtonVariant.Filled else ChuButtonVariant.Outlined,
-        modifier = Modifier.height(buttonHeight),
+        // Drawn key stays 30dp; ChuButton expands the touch target to 48dp.
+        minHeight = buttonHeight,
+        minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
         contentPadding = buttonPadding,
     ) {
         ChuText(
@@ -272,7 +289,7 @@ private fun AccessoryButton(
             label = item.label,
             enabled = modifierState.isEnabled(toggleModifier),
             onClick = { onAction(item.action) },
-            modifier = Modifier.height(buttonHeight),
+            buttonHeight = buttonHeight,
             contentPadding = buttonPadding,
         )
     } else {
@@ -288,7 +305,9 @@ private fun AccessoryButton(
             ChuButton(
                 onClick = { onAction(item.action) },
                 variant = ChuButtonVariant.Outlined,
-                modifier = Modifier.height(buttonHeight),
+                // 30dp drawn key centered in ChuButton's 48dp touch target.
+                minHeight = buttonHeight,
+                minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
                 contentPadding = buttonPadding,
             ) {
                 ChuText(item.label, style = typography.label)
@@ -311,7 +330,8 @@ private fun FilesButton(
         ChuButton(
             onClick = onChuchuKey,
             variant = if (chuchuKeyActive) ChuButtonVariant.Filled else ChuButtonVariant.Outlined,
-            modifier = Modifier.height(buttonHeight),
+            minHeight = buttonHeight,
+            minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
             contentPadding = buttonPadding,
         ) {
             ChuText(
@@ -325,7 +345,8 @@ private fun FilesButton(
     ChuButton(
         onClick = onOpenFiles,
         variant = ChuButtonVariant.Outlined,
-        modifier = Modifier.height(buttonHeight),
+        minHeight = buttonHeight,
+        minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
         contentPadding = buttonPadding,
     ) {
         ChuText(
@@ -354,7 +375,8 @@ private fun SettingsButton(
     ChuButton(
         onClick = onSettings,
         variant = ChuButtonVariant.Outlined,
-        modifier = Modifier.height(buttonHeight),
+        minHeight = buttonHeight,
+        minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
         contentPadding = buttonPadding,
     ) {
         ChuText("⚙", style = typography.label)
@@ -375,8 +397,7 @@ private fun RepeatableAccessoryButton(
 
     Box(
         modifier =
-            Modifier.height(buttonHeight)
-                .pointerInput(item.action) {
+            Modifier.pointerInput(item.action) {
                     awaitEachGesture {
                         awaitFirstDown().consume()
                         pressed = true
@@ -412,6 +433,12 @@ private fun RepeatableAccessoryButton(
                         true
                     }
                 }
+                // 48dp tall touch target; the drawn surface below stays buttonHeight
+                // (30dp). Width is left to the key's own content: forcing 48dp wide
+                // keys overflows the two-row bar and silently drops the trailing
+                // Enter/Space/⌘ keys off the end of the FlowRow.
+                .minimumInteractiveComponentSize(minWidth = 0.dp),
+        contentAlignment = Alignment.Center,
     ) {
         ChuButtonSurface(
             modifier = Modifier.height(buttonHeight),
@@ -429,7 +456,7 @@ private fun ToggleButton(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier,
+    buttonHeight: Dp,
     contentPadding: PaddingValues,
 ) {
     val colors = ChuColors.current
@@ -437,7 +464,9 @@ private fun ToggleButton(
     val activeLabel = if (enabled) "• $label" else label
     ChuButton(
         onClick = onClick,
-        modifier = modifier,
+        // 30dp drawn key centered in ChuButton's 48dp touch target.
+        minHeight = buttonHeight,
+        minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
         contentPadding = contentPadding,
         variant = if (enabled) ChuButtonVariant.Filled else ChuButtonVariant.Outlined,
     ) {
