@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["chuchu-backup"]
+members = ["tafh-backup"]
 
 # Android JNI libraries are loaded from a shared object, so size matters more
 # than peak throughput. `panic = "abort"` is also required: unwinding across the

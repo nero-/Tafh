@@ -1,0 +1,18 @@
+[package]
+name = "tafh-backup"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "CHBK encrypted backup container and JNI bridge for Tafh"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+aes-gcm = "0.10"
+hmac = "0.12"
+jni = "0.21"
+pbkdf2 = "0.12"
+sha1 = "0.10"
+subtle = { version = "2.6", default-features = false }
+zeroize = "1.8"

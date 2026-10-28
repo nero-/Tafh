@@ -1,15 +1,15 @@
-# chuchu-backup (Rust)
+# tafh-backup (Rust)
 
 CHBK encrypted backup container + JNI bridge, replacing the previous Zig bridge
 module. Exports `nativeEncrypt`/`nativeDecrypt` for `NativeBackupBridge`, loaded
-as `libchuchu_backup.so`.
+as `libtafh_backup.so`.
 
 ## Build
 ```sh
 cargo install cargo-ndk   # once
 cd rust && rustup target add aarch64-linux-android x86_64-linux-android
 ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/29.0.13113456 cargo ndk \
-  -t arm64-v8a -t x86_64 -o ../android/app/src/main/jniLibs build --release -p chuchu-backup
+  -t arm64-v8a -t x86_64 -o ../android/app/src/main/jniLibs build --release -p tafh-backup
 cargo test   # host tests
 ```
 

@@ -169,7 +169,7 @@ fn buildNativeLibrary(
 
     const lib = b.addLibrary(.{
         .linkage = .dynamic,
-        .name = "chuchu_jni",
+        .name = "tafh_jni",
         .root_module = root_module,
     });
     lib.link_function_sections = true;
@@ -204,8 +204,8 @@ fn buildNativeLibrary(
 /// deliberately excluded: they only build for an Android target, and including
 /// them here would make `zig build test` require an NDK.
 ///
-/// The CHBK crypto vectors that used to live in `src/bridge/chuchu_backup.zig`
-/// moved to `rust/chuchu-backup`; a new bridge source with test blocks has to be
+/// The CHBK crypto vectors that used to live in `src/bridge/tafh_backup.zig`
+/// moved to `rust/tafh-backup`; a new bridge source with test blocks has to be
 /// added here explicitly.
 const host_test_modules = [_][]const u8{
     "src/bridge/ipc.zig",
@@ -270,7 +270,7 @@ pub fn build(b: *std.Build) void {
 
     // Failing step reused by every Android target: the NDK is mandatory, and a
     // silent no-op here would let `zig build jni` "succeed" while shipping no
-    // libchuchu_jni.so.
+    // libtafh_jni.so.
     const missing_ndk = b.addFail(
         "Android NDK not found: set ANDROID_NDK_HOME (preferred) or ANDROID_NDK_ROOT to an NDK installation before building native targets",
     );
@@ -290,7 +290,7 @@ pub fn build(b: *std.Build) void {
             const copy_to_jni_libs = b.addSystemCommand(&.{"cp"});
             copy_to_jni_libs.step.dependOn(&mkdir_jni_libs.step);
             copy_to_jni_libs.addFileArg(native_lib.getEmittedBin());
-            _ = copy_to_jni_libs.addArg(b.fmt("{s}/libchuchu_jni.so", .{jni_lib_dir}));
+            _ = copy_to_jni_libs.addArg(b.fmt("{s}/libtafh_jni.so", .{jni_lib_dir}));
 
             jni_step.dependOn(&copy_to_jni_libs.step);
         }

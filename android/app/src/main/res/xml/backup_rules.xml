@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- SSH private keys, host passwords, passphrases, and trusted host keys are backed up only through Chuchu's encrypted local export flow. -->
+    <!-- SSH private keys, host passwords, passphrases, and trusted host keys are backed up only through Tafh's encrypted local export flow. -->
     <exclude domain="database" path="." />
     <exclude domain="sharedpref" path="." />
     <!-- The local shell runs with HOME=filesDir, so shell history and anything the

@@ -97,14 +97,14 @@ jobs:
             zig build -Doptimize=ReleaseSmall -Dtarget=aarch64-linux-android.24 jni
           '
       # The encrypted backup container lives in Rust now; without this the APK
-      # ships no libchuchu_backup.so and backup export/import fails on device.
-      - name: build chuchu_backup (Rust)
+      # ships no libtafh_backup.so and backup export/import fails on device.
+      - name: build tafh_backup (Rust)
         run: |
           set -euo pipefail
           rustup target add aarch64-linux-android
           cargo install cargo-ndk --locked
           cd rust
-          cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p chuchu-backup
+          cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p tafh-backup
 
       - name: generate release key
         run: |
@@ -132,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           SRC="$(ls ./android/app/build/outputs/apk/release/*.apk | head -n1)"
-          DEST="./android/app/build/outputs/apk/release/chuchu-nightly.apk"
+          DEST="./android/app/build/outputs/apk/release/tafh-nightly.apk"
           cp "$SRC" "$DEST"
           echo "path=${DEST}" >> "$GITHUB_OUTPUT"
 
@@ -142,7 +142,7 @@ jobs:
           set -euo pipefail
           NOTES="$(mktemp)"
           {
-            echo "### Chuchu nightly"
+            echo "### Tafh nightly"
             echo
             echo "Automated build from \`main\` (\`${{ steps.version.outputs.short_sha }}\`)."
             echo

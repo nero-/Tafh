@@ -1,7 +1,7 @@
 {
   global:
     Java_*;
-    chuchu_*;
+    tafh_*;
     update_render_state;
     shm_open;
     shm_unlink;

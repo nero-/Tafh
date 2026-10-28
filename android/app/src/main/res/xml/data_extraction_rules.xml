@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- SSH private keys, host passwords, passphrases, and trusted host keys are backed up only through Chuchu's encrypted local export flow. -->
+        <!-- SSH private keys, host passwords, passphrases, and trusted host keys are backed up only through Tafh's encrypted local export flow. -->
         <exclude domain="database" path="." />
         <exclude domain="sharedpref" path="." />
         <!-- Local shell HOME lives in filesDir; keep user-written files out of cloud backups. -->

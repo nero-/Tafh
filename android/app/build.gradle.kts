@@ -20,7 +20,7 @@ val releaseSigningConfigured =
         releaseKeyPassword != null
 
 android {
-    namespace = "com.jossephus.chuchu"
+    namespace = "dev.nero.tafh"
     compileSdk {
         version = release(36)
     }
@@ -33,7 +33,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.jossephus.chuchu"
+        applicationId = "dev.nero.tafh"
         minSdk = 24
         targetSdk = 36
 
@@ -44,7 +44,7 @@ android {
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: (releaseBase * 1_000)
         versionName = System.getenv("VERSION_NAME") ?: "$major.$minor.$patch"
 
-        // Only these ABIs have a libchuchu_jni.so produced by the native build.
+        // Only these ABIs have a libtafh_jni.so produced by the native build.
         // Advertising all four Android ABIs would ship an APK whose native bridge
         // silently reports "not loaded" on 32-bit devices.
         val selectedAbis = System.getenv("ANDROID_ABI_FILTERS")

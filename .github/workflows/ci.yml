@@ -29,7 +29,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4.4.4
 
-      # Unit tests run on the JVM and never load libchuchu_jni.so, so this job
+      # Unit tests run on the JVM and never load libtafh_jni.so, so this job
       # deliberately skips NDK/native setup.
       - name: Run unit tests
         working-directory: android
@@ -62,7 +62,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # chuchu-backup is pure Rust: the CHBK container plus its JNI entry points
+      # tafh-backup is pure Rust: the CHBK container plus its JNI entry points
       # are exercised on the host, including the cross-language fixtures captured
       # from the retired Zig implementation.
       - name: Run cargo tests

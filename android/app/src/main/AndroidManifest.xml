@@ -16,17 +16,17 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Chuchu"
+        android:theme="@style/Theme.Tafh"
         android:extractNativeLibs="false">
         <activity
-            android:name="com.jossephus.chuchu.MainActivity"
+            android:name="dev.nero.tafh.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density|fontScale"
             android:enabled="true"
             android:exported="true"
             android:label="@string/app_name"
             android:resizeableActivity="true"
             android:windowSoftInputMode="adjustNothing"
-            android:theme="@style/Theme.Chuchu">
+            android:theme="@style/Theme.Tafh">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -35,7 +35,7 @@
         </activity>
 
         <service
-            android:name="com.jossephus.chuchu.service.terminal.SessionForegroundService"
+            android:name="dev.nero.tafh.service.terminal.SessionForegroundService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">

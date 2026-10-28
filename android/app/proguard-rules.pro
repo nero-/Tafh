@@ -15,19 +15,19 @@
 # Every class that declares `external fun` must keep those members, otherwise
 # R8 renames/strips them and the .so cannot bind: release builds then fail with
 # UnsatisfiedLinkError even though debug works.
--keepclassmembers class com.jossephus.chuchu.service.terminal.GhosttyBridge {
+-keepclassmembers class dev.nero.tafh.service.terminal.GhosttyBridge {
     *** native*;
 }
--keepclassmembers class com.jossephus.chuchu.service.ssh.NativeSshBridge {
+-keepclassmembers class dev.nero.tafh.service.ssh.NativeSshBridge {
     *** native*;
 }
--keepclassmembers class com.jossephus.chuchu.service.mosh.NativeMoshBridge {
+-keepclassmembers class dev.nero.tafh.service.mosh.NativeMoshBridge {
     *** native*;
 }
--keepclassmembers class com.jossephus.chuchu.service.terminal.NativeLocalShellBridge {
+-keepclassmembers class dev.nero.tafh.service.terminal.NativeLocalShellBridge {
     *** native*;
 }
--keepclassmembers class com.jossephus.chuchu.service.backup.NativeBackupBridge {
+-keepclassmembers class dev.nero.tafh.service.backup.NativeBackupBridge {
     *** native*;
 }
 

@@ -32,4 +32,4 @@ jobs:
           publish_dir: ./docs/.output/public
           publish_branch: gh-pages
           destination_dir: .
-          cname: chuchu.jossephus.et
+          cname: tafh.jossephus.et
