@@ -10,9 +10,15 @@ plugins {
 // three credential env vars exist. Otherwise `assembleRelease` produces an
 // unsigned APK instead of failing on a half-configured signing config.
 val releaseKeystoreFile = file("key.jks")
-val releaseKeystorePassword = System.getenv("KEYSTORE_PASSWORD")
-val releaseKeyAlias = System.getenv("KEY_ALIAS")
-val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+// Blank counts as absent. An unset GitHub secret still expands to an empty string,
+// and a fork therefore used to "configure" signing with a junk keystore and fail in
+// packageRelease ("Tag number over 30 is not supported") instead of building.
+fun envOrNull(name: String): String? =
+    System.getenv(name)?.takeIf { it.isNotBlank() }
+
+val releaseKeystorePassword = envOrNull("KEYSTORE_PASSWORD")
+val releaseKeyAlias = envOrNull("KEY_ALIAS")
+val releaseKeyPassword = envOrNull("KEY_PASSWORD")
 val releaseSigningConfigured =
     releaseKeystoreFile.exists() &&
         releaseKeystorePassword != null &&

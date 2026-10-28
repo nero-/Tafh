@@ -3,7 +3,8 @@ package dev.nero.tafh.service.multiplexer
 import dev.nero.tafh.model.MultiplexerType
 
 object TmuxMultiplexer : Multiplexer {
-    private val tafhSessionRegex = Regex("^tafh-[1-9][0-9]*$")
+    // Accepts the pre-rename `chuchu-` prefix for sessions that already exist.
+    private val tafhSessionRegex = Regex("^(?:tafh|chuchu)-[1-9][0-9]*$")
 
     override val type: MultiplexerType = MultiplexerType.Tmux
 

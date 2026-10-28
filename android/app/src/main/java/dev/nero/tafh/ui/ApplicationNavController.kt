@@ -87,19 +87,34 @@ fun ApplicationNavController() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // Set when the device cannot authenticate at all (no enrolled credential or no
+    // host activity). Locking on such a device would be an unrecoverable lockout:
+    // the prompt can never return Success, so the gate would never open.
+    var deviceCannotAuthenticate by remember { mutableStateOf(false) }
+
     LaunchedEffect(appLockEnabled, appUnlocked, unlockPromptRequested, appLockBlockedUntilToggle) {
         if (
             appLockEnabled && !appUnlocked && !unlockPromptRequested && !appLockBlockedUntilToggle
         ) {
+            if (deviceCannotAuthenticate) {
+                // Do not ask again; the lock screen offers the explicit escape below.
+                return@LaunchedEffect
+            }
             unlockPromptRequested = true
             requireUserVerification(
                 context = context,
                 title = "Unlock Tafh",
                 subtitle = "Authenticate to continue",
             ) { result ->
-                appUnlocked = result == VerificationResult.Success
-                if (result != VerificationResult.Success) {
-                    appLockBlockedUntilToggle = true
+                when (result) {
+                    VerificationResult.Success -> appUnlocked = true
+                    VerificationResult.Unavailable -> {
+                        // Nothing to authenticate against. Refusing to open would brick
+                        // the app, so fall back to the same explicit acknowledgement used
+                        // for backup export: the screen stays covered until the user acts.
+                        deviceCannotAuthenticate = true
+                    }
+                    VerificationResult.Failed -> appLockBlockedUntilToggle = true
                 }
                 unlockPromptRequested = false
             }
@@ -111,11 +126,17 @@ fun ApplicationNavController() {
         // list, settings screen, or terminal is reachable without authentication.
         AppLockScreen(
             blocked = appLockBlockedUntilToggle,
+            canAuthenticate = !deviceCannotAuthenticate,
             onUnlock = {
                 // Clearing both flags re-arms the LaunchedEffect above, which
                 // re-issues requireUserVerification.
                 appLockBlockedUntilToggle = false
                 unlockPromptRequested = false
+            },
+            onOpenWithoutAuthentication = {
+                // Only reachable when the platform reported Unavailable, i.e. there is
+                // no credential to check. Mirrors the backup-export escape hatch.
+                appUnlocked = true
             },
         )
         return
@@ -313,7 +334,12 @@ fun ApplicationNavController() {
  * authentication.
  */
 @Composable
-private fun AppLockScreen(blocked: Boolean, onUnlock: () -> Unit) {
+private fun AppLockScreen(
+    blocked: Boolean,
+    canAuthenticate: Boolean,
+    onUnlock: () -> Unit,
+    onOpenWithoutAuthentication: () -> Unit,
+) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
     Box(
@@ -334,16 +360,34 @@ private fun AppLockScreen(blocked: Boolean, onUnlock: () -> Unit) {
             }
             ChuText(
                 text =
-                    if (blocked) {
-                        "Authentication failed. Tap Unlock to try again."
-                    } else {
-                        "App lock is enabled. Authenticate to continue."
+                    when {
+                        !canAuthenticate ->
+                            "This device has no screen lock, so Tafh cannot verify your " +
+                                "identity. Set a screen lock in system settings, or open the " +
+                                "app without verification."
+                        blocked -> "Authentication failed. Tap Unlock to try again."
+                        else -> "App lock is enabled. Authenticate to continue."
                     },
                 style = typography.body,
                 color = colors.textSecondary,
             )
             ChuButton(onClick = onUnlock, variant = ChuButtonVariant.Outlined, bracketed = true) {
                 ChuText("Unlock", style = typography.label, color = colors.textSecondary)
+            }
+            if (!canAuthenticate) {
+                // The alternative to this button is a permanently unusable app.
+                ChuButton(
+                    onClick = onOpenWithoutAuthentication,
+                    variant = ChuButtonVariant.Ghost,
+                    bracketed = true,
+                    borderColor = colors.textMuted,
+                ) {
+                    ChuText(
+                        "open without verification",
+                        style = typography.label,
+                        color = colors.textMuted,
+                    )
+                }
             }
         }
     }
