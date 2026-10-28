@@ -19,8 +19,10 @@ import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -40,14 +42,15 @@ class SettingsBackupViewModel(application: Application) : AndroidViewModel(appli
             }
     }
 
-    private val db = AppDatabase.getInstance(application)
-    private val backupRepo = ChuchuBackupRepository(db)
+    private val backupRepo = ChuchuBackupRepository(AppDatabase.getInstance(application))
 
-    private val _keys = MutableStateFlow<List<SshKey>>(emptyList())
-    val keys: StateFlow<List<SshKey>> = _keys.asStateFlow()
+    // Backups must see decrypted secrets, so these come from the repositories, which decode
+    // rows on the way out. Collecting the DAO flows directly would surface ciphertext.
+    val keys: StateFlow<List<SshKey>> =
+        backupRepo.observeKeys().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private val _hosts = MutableStateFlow<List<HostProfile>>(emptyList())
-    val hosts: StateFlow<List<HostProfile>> = _hosts.asStateFlow()
+    val hosts: StateFlow<List<HostProfile>> =
+        backupRepo.observeHosts().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _isBusy = MutableStateFlow(false)
     val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
@@ -74,11 +77,6 @@ class SettingsBackupViewModel(application: Application) : AndroidViewModel(appli
 
     // Decrypted payload cached during import flow
     private var cachedPayload: BackupPayload? = null
-
-    init {
-        viewModelScope.launch { db.sshKeyDao().observeAll().collect { _keys.value = it } }
-        viewModelScope.launch { db.hostProfileDao().observeAll().collect { _hosts.value = it } }
-    }
 
     // ── Passphrase state setters ──────────────────────────────────────────────
 

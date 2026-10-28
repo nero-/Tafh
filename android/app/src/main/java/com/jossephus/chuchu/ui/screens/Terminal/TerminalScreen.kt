@@ -50,6 +50,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,6 +99,7 @@ import com.jossephus.chuchu.ui.screens.Files.formatFileSize
 import com.jossephus.chuchu.ui.security.VerificationResult
 import com.jossephus.chuchu.ui.security.requireUserVerification
 import com.jossephus.chuchu.ui.terminal.AccessoryAction
+import com.jossephus.chuchu.ui.terminal.AccessoryDispatchResult
 import com.jossephus.chuchu.ui.terminal.BuiltinCommand
 import com.jossephus.chuchu.ui.terminal.ChuchuKeyBindings
 import com.jossephus.chuchu.ui.terminal.CustomActionModifier
@@ -137,7 +141,7 @@ private val exportSequence = AtomicLong()
  * separators are stripped, `.`/`..` and blank names are rejected, and control characters (including
  * NUL) are dropped.
  */
-private fun sanitizeRemoteFileName(name: String): String {
+internal fun sanitizeRemoteFileName(name: String): String {
     val base =
         name
             .substringAfterLast('/')
@@ -164,6 +168,28 @@ private fun newExportFile(context: Context, safeName: String): File {
 }
 
 private const val EXPORT_TTL_MS = 24L * 60L * 60L * 1000L
+
+/**
+ * Ctrl/Alt/Cmd are one-shot on mobile: a dispatch that forwards input consumes them so the next
+ * keystroke is not silently a control character. Shift stays latched because the accessory bar
+ * renders it as a sticky lock (and shift-arrow selection relies on it).
+ */
+private fun ModifierState.consumeForDispatch(): ModifierState =
+    copy(ctrl = false, alt = false, cmd = false)
+
+/**
+ * Modifier state to keep after an accessory dispatch. Toggling a modifier must not cancel itself,
+ * so only actions that actually forwarded a key/text (or a paste that happened) consume the
+ * one-shot modifiers.
+ */
+private fun AccessoryDispatchResult.modifierStateAfterDispatch(
+    pasteHappened: Boolean = false
+): ModifierState =
+    if (text?.isNotEmpty() == true || specialKey != null || (shouldPaste && pasteHappened)) {
+        modifierState.consumeForDispatch()
+    } else {
+        modifierState
+    }
 
 private fun TerminalViewModel.dispatchTextWithModifierState(
     text: String,
@@ -473,19 +499,22 @@ fun TerminalScreen(
             GhosttyThemeRegistry.getTheme(context, resolvedThemeName)
         }
     val isDarkTheme = (ghosttyTheme?.background ?: colors.background).luminance() < 0.5f
-    var selection by remember { mutableStateOf<TerminalSelection?>(null) }
+    var selection by
+        rememberSaveable(stateSaver = TerminalSelectionSaver) {
+            mutableStateOf<TerminalSelection?>(null)
+        }
     var selectionState by remember { mutableStateOf<TerminalSelectionState?>(null) }
     var showPassphrasePrompt by remember { mutableStateOf(false) }
     var passphraseInput by remember { mutableStateOf("") }
     var pendingTabSpec by remember { mutableStateOf<TabSpec?>(null) }
     var passphraseFromPicker by remember { mutableStateOf(false) }
-    var showTabSheet by remember { mutableStateOf(false) }
+    var showTabSheet by rememberSaveable { mutableStateOf(false) }
     var showGlobalTabManager by remember { mutableStateOf(false) }
     var showNewTabPicker by remember { mutableStateOf(false) }
     var hasSeenTabsForHost by remember(hostId, openLocalShell) { mutableStateOf(false) }
-    var focusedTabIndex by remember { mutableStateOf(0) }
+    var focusedTabIndex by rememberSaveable { mutableStateOf(0) }
     var localShellFilesMessage by remember { mutableStateOf<String?>(null) }
-    var terminalFontSizeSp by remember {
+    var terminalFontSizeSp by rememberSaveable {
         mutableStateOf(
             settingsFontSize.coerceIn(
                 SettingsRepository.MIN_TERMINAL_FONT_SIZE,
@@ -878,30 +907,11 @@ fun TerminalScreen(
                                 onReconnect = vm::reconnect,
                             )
                         } else if (tabs.isEmpty()) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                ChuText(
-                                    "no terminal sessions",
-                                    style = typography.body,
-                                    color = colors.textMuted,
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                ChuButton(
-                                    onClick = openAnotherSessionForCurrentHost,
-                                    modifier =
-                                        Modifier.defaultMinSize(
-                                            minWidth = 48.dp,
-                                            minHeight = 48.dp,
-                                        ),
-                                    variant = ChuButtonVariant.Outlined,
-                                    bracketed = true,
-                                ) {
-                                    ChuText(
-                                        "+ new connection",
-                                        style = typography.label,
-                                        color = colors.accent,
-                                    )
-                                }
-                            }
+                            TerminalNoSessionsActions(
+                                onNewConnection = openAnotherSessionForCurrentHost
+                            )
+                        } else {
+                            TerminalDisconnectedActions(onReconnect = vm::reconnect)
                         }
                     }
                 }
@@ -927,6 +937,12 @@ fun TerminalScreen(
                             onBack = { vm.dismissMultiplexerRecovery(onBack) },
                             onReconnect = vm::reconnect,
                         )
+                    } else if (tabs.isEmpty()) {
+                        TerminalNoSessionsActions(
+                            onNewConnection = openAnotherSessionForCurrentHost
+                        )
+                    } else {
+                        TerminalDisconnectedActions(onReconnect = vm::reconnect)
                     }
                 }
             }
@@ -971,14 +987,39 @@ fun TerminalScreen(
             val isReconnecting = sessionState.status == SessionStatus.Reconnecting
             val snapshot = sessionState.snapshot
             if (snapshot != null) {
-                var modifierState by remember { mutableStateOf(ModifierState()) }
+                var modifierState by
+                    rememberSaveable(stateSaver = ModifierStateSaver) {
+                        mutableStateOf(ModifierState())
+                    }
                 val inputViewRef = remember { mutableStateOf<TerminalInputView?>(null) }
+                // Modifiers used by each forwarded key press, replayed on its release so
+                // consuming the one-shot modifiers mid-press does not corrupt the key up event.
+                val pendingReleaseMods = remember { HashMap<Int, Int>() }
                 var menuSize by remember { mutableStateOf(IntSize.Zero) }
                 val clipboard = remember { context.getSystemService(ClipboardManager::class.java) }
+                // Deliberately not saved: after process death this starts false, so the selection
+                // that was just restored is not immediately cleared again.
+                var selectionOwnerInitialized by remember { mutableStateOf(false) }
                 LaunchedEffect(sessionState.handle, activeTabId) {
+                    // Skip the first run so a selection restored after process death survives; a
+                    // later session/tab switch (or re-entry after a reconnect) still clears it.
+                    if (!selectionOwnerInitialized) {
+                        selectionOwnerInitialized = true
+                        return@LaunchedEffect
+                    }
                     selection = null
                     selectionState = null
                     menuSize = IntSize.Zero
+                }
+                // Switching tabs must not carry a latched Ctrl/Alt/Cmd into the new tab. The first
+                // emission is skipped so a state restored after process death survives.
+                val lastModifierTabId = remember { mutableStateOf(activeTabId) }
+                LaunchedEffect(activeTabId) {
+                    if (lastModifierTabId.value != activeTabId) {
+                        lastModifierTabId.value = activeTabId
+                        modifierState = ModifierState()
+                        pendingReleaseMods.clear()
+                    }
                 }
 
                 fun pasteClipboard(): Boolean {
@@ -989,6 +1030,7 @@ fun TerminalScreen(
                     val text = clip.getItemAt(0).coerceToText(context).toString()
                     if (text.isNotEmpty()) {
                         vm.onPasteText(modifierState.applyToText(text))
+                        modifierState = modifierState.consumeForDispatch()
                         selection = null
                         selectionState = null
                         return true
@@ -1039,8 +1081,10 @@ fun TerminalScreen(
                         fun check() {
                             hasClipboardText =
                                 try {
-                                    clipboard?.hasPrimaryClip() == true &&
-                                        clipboard!!.primaryClip?.getItemAt(0)?.text?.isNotEmpty() ==
+                                    val clip = clipboard?.primaryClip
+                                    clip != null &&
+                                        clip.itemCount > 0 &&
+                                        clip.getItemAt(0)?.coerceToText(context)?.isNotEmpty() ==
                                             true
                                 } catch (_: SecurityException) {
                                     false
@@ -1068,7 +1112,6 @@ fun TerminalScreen(
                         val currentModifierState = modifierState
                         val result =
                             TerminalAccessoryDispatcher.dispatch(action, currentModifierState)
-                        modifierState = result.modifierState
 
                         if (result.suppressImeInput) {
                             inputViewRef.value?.armInputSuppression(action.toString())
@@ -1080,9 +1123,14 @@ fun TerminalScreen(
 
                         result.text?.let { text -> vm.onTextInput(text) }
 
+                        var pasteHappened = false
                         if (result.shouldPaste) {
-                            pasteClipboard()
+                            // Paste reads the still-latched state so it applies the modifiers,
+                            // then consumes them like any other dispatched input.
+                            pasteHappened = pasteClipboard()
                         }
+
+                        modifierState = result.modifierStateAfterDispatch(pasteHappened)
                     }
 
                     fun copySelection() {
@@ -1617,6 +1665,10 @@ fun TerminalScreen(
                                                             text,
                                                             modifierState,
                                                         )
+                                                        if (text.isNotEmpty()) {
+                                                            modifierState =
+                                                                modifierState.consumeForDispatch()
+                                                        }
                                                     }
                                                 }
                                                 onTerminalKey =
@@ -1730,8 +1782,15 @@ fun TerminalScreen(
                                                             }
                                                         }
                                                         if (shouldForwardToTerminal) {
+                                                            // One-shot modifiers are spent by the
+                                                            // press they modified, so the release
+                                                            // of the same key replays the mods of
+                                                            // that press, not the cleared state.
+                                                            val activeMods =
+                                                                modifierState.terminalMods()
                                                             val mergedMods =
-                                                                mods or modifierState.terminalMods()
+                                                                pendingReleaseMods[key]
+                                                                    ?: (mods or activeMods)
                                                             vm.onHardwareKey(
                                                                 key,
                                                                 codepoint,
@@ -1739,6 +1798,18 @@ fun TerminalScreen(
                                                                 action,
                                                                 charCode,
                                                             )
+                                                            when (action) {
+                                                                GhosttyKeyAction.Press -> {
+                                                                    pendingReleaseMods[key] =
+                                                                        mergedMods
+                                                                    modifierState =
+                                                                        modifierState
+                                                                            .consumeForDispatch()
+                                                                }
+                                                                GhosttyKeyAction.Release ->
+                                                                    pendingReleaseMods.remove(key)
+                                                                else -> {}
+                                                            }
                                                         }
                                                     }
                                                 setOnFocusChangeListener { _, hasFocus ->
@@ -1897,13 +1968,13 @@ fun TerminalScreen(
                                     action,
                                     preDispatchModifierState,
                                 )
-                            modifierState = result.modifierState
 
                             // Mirror main-handler IME suppression
                             if (result.suppressImeInput) {
                                 inputViewRef.value?.armInputSuppression(action.toString())
                             }
 
+                            var forwardedToTerminal = false
                             when (result.specialKey) {
                                 TerminalSpecialKey.Left,
                                 TerminalSpecialKey.Up -> {
@@ -1932,20 +2003,30 @@ fun TerminalScreen(
                                             key,
                                             preDispatchModifierState.terminalMods(),
                                         )
+                                        forwardedToTerminal = true
                                     }
                                     result.text?.let { text ->
                                         if (!chuchuKeys.handleText(text)) {
                                             vm.onTextInput(text)
+                                            forwardedToTerminal = true
                                         }
                                     }
                                 }
                             }
 
-                            // Preserve sticky modifiers: paste applies active modifiers
-                            // but does not clear them.
                             if (result.shouldPaste) {
-                                pasteClipboard()
+                                // Pasting applies the modifiers, then spends them.
+                                forwardedToTerminal = pasteClipboard()
                             }
+
+                            // A toggle alone never clears itself; only forwarded input spends the
+                            // one-shot Ctrl/Alt/Cmd.
+                            modifierState =
+                                if (forwardedToTerminal) {
+                                    result.modifierState.consumeForDispatch()
+                                } else {
+                                    result.modifierState
+                                }
                         }
                     }
                     CommandPalette(
@@ -2065,6 +2146,64 @@ fun TerminalScreen(
                 vm.switchToMultiplexerSession(name, multiplexerState.sessionsSourceTabId)
             },
         )
+    }
+}
+
+private val TerminalSelectionSaver: Saver<TerminalSelection?, Any> =
+    listSaver<TerminalSelection?, Any>(
+        save = { selection -> listOf(selection?.anchorIndex ?: -1, selection?.focusIndex ?: -1) },
+        restore = { saved ->
+            val anchor = saved.getOrNull(0) as? Int ?: -1
+            val focus = saved.getOrNull(1) as? Int ?: -1
+            if (anchor < 0 || focus < 0) null else TerminalSelection(anchor, focus)
+        },
+    )
+
+private val ModifierStateSaver: Saver<ModifierState, Any> =
+    listSaver<ModifierState, Any>(
+        save = { state -> listOf(state.ctrl, state.alt, state.shift, state.cmd) },
+        restore = { saved ->
+            ModifierState(
+                ctrl = saved.getOrNull(0) as? Boolean ?: false,
+                alt = saved.getOrNull(1) as? Boolean ?: false,
+                shift = saved.getOrNull(2) as? Boolean ?: false,
+                cmd = saved.getOrNull(3) as? Boolean ?: false,
+            )
+        },
+    )
+
+@Composable
+private fun TerminalNoSessionsActions(onNewConnection: () -> Unit) {
+    val colors = ChuColors.current
+    val typography = ChuTypography.current
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        ChuText("no terminal sessions", style = typography.body, color = colors.textMuted)
+        Spacer(modifier = Modifier.height(12.dp))
+        ChuButton(
+            onClick = onNewConnection,
+            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
+            variant = ChuButtonVariant.Outlined,
+            bracketed = true,
+        ) {
+            ChuText("+ new connection", style = typography.label, color = colors.accent)
+        }
+    }
+}
+
+@Composable
+private fun TerminalDisconnectedActions(onReconnect: () -> Unit) {
+    val colors = ChuColors.current
+    val typography = ChuTypography.current
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        ChuText("Session disconnected", color = colors.textMuted, style = typography.body)
+        Spacer(modifier = Modifier.height(16.dp))
+        ChuButton(
+            onClick = onReconnect,
+            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
+            variant = ChuButtonVariant.Filled,
+        ) {
+            ChuText("Reconnect", style = typography.label, color = colors.onAccent)
+        }
     }
 }
 

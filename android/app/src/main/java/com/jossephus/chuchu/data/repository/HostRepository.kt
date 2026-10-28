@@ -27,7 +27,16 @@ class HostRepository(
 
     suspend fun getById(id: Long): HostProfile? = dao.getById(id)?.let(::decode)
 
+    suspend fun getAll(): List<HostProfile> = dao.getAll().map(::decode)
+
     suspend fun upsert(profile: HostProfile): Long = dao.insert(encode(profile))
+
+    /**
+     * Raw insert used by backup restore. Kept separate from [upsert] because the DAO insert behind
+     * it aborts on conflict instead of replacing, which is what keeps a restore from silently
+     * overwriting an existing host.
+     */
+    suspend fun insertForImport(profile: HostProfile): Long = dao.insertForImport(encode(profile))
 
     suspend fun update(profile: HostProfile) = dao.update(encode(profile))
 

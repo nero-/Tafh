@@ -51,7 +51,7 @@ class TailscaleStatusChecker(private val context: Context) {
 
     private fun isTailnetIp(addr: InetAddress): Boolean {
         if (addr.isLoopbackAddress || addr.isAnyLocalAddress) return false
-        val bytes = addr.address
+        val bytes = addr.address ?: return false
         return when (addr) {
             is Inet4Address -> isTailnetIpv4(bytes)
             is Inet6Address -> isTailnetIpv6(bytes)

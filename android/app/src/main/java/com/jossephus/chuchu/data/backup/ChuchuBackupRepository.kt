@@ -1,20 +1,51 @@
 package com.jossephus.chuchu.data.backup
 
 import androidx.room.withTransaction
+import com.jossephus.chuchu.data.crypto.SecretCodec
 import com.jossephus.chuchu.data.db.AppDatabase
+import com.jossephus.chuchu.data.repository.HostRepository
+import com.jossephus.chuchu.data.repository.SshKeyRepository
 import com.jossephus.chuchu.model.HostProfile
 import com.jossephus.chuchu.model.SshKey
 import com.jossephus.chuchu.service.backup.ChuchuBackupCodec
+import kotlinx.coroutines.flow.Flow
 
-class ChuchuBackupRepository(private val db: AppDatabase) {
+/**
+ * Exports and restores encrypted backups.
+ *
+ * All reads and writes go through [SshKeyRepository] and [HostRepository] rather than the DAOs.
+ * That matters because the database holds device-bound ciphertext: exporting raw rows would place
+ * secrets encrypted with *this* device's `AndroidKeyStore` key into a file that is restored
+ * elsewhere and then fails to decrypt, and importing through the DAOs would write plaintext
+ * straight past the codec. The repositories decrypt on read (backup payloads are plaintext domain
+ * models inside the already-encrypted backup container) and encrypt on write (rows stay encrypted
+ * at rest).
+ */
+class ChuchuBackupRepository(
+    private val db: AppDatabase,
+    secretCodec: SecretCodec = AppDatabase.secretCodec,
+) {
+    private val keys = SshKeyRepository(dao = db.sshKeyDao(), codec = secretCodec)
+    private val hosts = HostRepository(dao = db.hostProfileDao(), codec = secretCodec)
+
+    fun observeKeys(): Flow<List<SshKey>> = keys.observeAll()
+
+    fun observeHosts(): Flow<List<HostProfile>> = hosts.observeAll()
+
+    /**
+     * Reads every key and host through the repositories, i.e. with secrets decrypted. Split out
+     * from [createEncryptedBackup] so the read boundary is testable without the native container.
+     */
+    suspend fun snapshotPayload(): BackupPayload =
+        db.withTransaction {
+            BackupPayload(
+                keys = keys.getAll().map(BackupSshKey::fromEntity),
+                hosts = hosts.getAll().map(BackupHostProfile::fromEntity),
+            )
+        }
+
     suspend fun createEncryptedBackup(passphrase: CharArray): ByteArray {
-        val payload =
-            db.withTransaction {
-                BackupPayload(
-                    keys = db.sshKeyDao().getAll().map(BackupSshKey::fromEntity),
-                    hosts = db.hostProfileDao().getAll().map(BackupHostProfile::fromEntity),
-                )
-            }
+        val payload = snapshotPayload()
         return ChuchuBackupCodec.encrypt(payload, passphrase)
     }
 
@@ -24,8 +55,8 @@ class ChuchuBackupRepository(private val db: AppDatabase) {
     suspend fun planImport(payload: BackupPayload): BackupImportPlan {
         return ChuchuBackupImportPlanner.planImport(
             payload = payload,
-            existingKeys = db.sshKeyDao().getAll(),
-            existingHosts = db.hostProfileDao().getAll(),
+            existingKeys = keys.getAll(),
+            existingHosts = hosts.getAll(),
         )
     }
 
@@ -34,8 +65,8 @@ class ChuchuBackupRepository(private val db: AppDatabase) {
             val plan =
                 ChuchuBackupImportPlanner.planImport(
                     payload = payload,
-                    existingKeys = db.sshKeyDao().getAll(),
-                    existingHosts = db.hostProfileDao().getAll(),
+                    existingKeys = keys.getAll(),
+                    existingHosts = hosts.getAll(),
                 )
             applyImportPlan(plan)
         }
@@ -51,7 +82,7 @@ class ChuchuBackupRepository(private val db: AppDatabase) {
         plan.keyActions.forEachIndexed { index, action ->
             if (action is KeyImportAction.Insert) {
                 check(action.key.id == 0L) { "Imported SSH keys must not preserve exported ids" }
-                val localId = db.sshKeyDao().insertForImport(action.key)
+                val localId = keys.insertForImport(action.key)
                 insertedKeyIdsByActionIndex[index] = localId
             }
         }
@@ -62,7 +93,7 @@ class ChuchuBackupRepository(private val db: AppDatabase) {
             val localKeyId =
                 action.keyActionIndex?.let { insertedKeyIdsByActionIndex[it] } ?: action.host.keyId
             val host = action.host.copy(keyId = localKeyId)
-            db.hostProfileDao().insertForImport(host)
+            hosts.insertForImport(host)
             importedHosts += 1
         }
 

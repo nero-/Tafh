@@ -35,6 +35,12 @@ class SshKeyRepository(
 
     suspend fun insert(key: SshKey): Long = dao.insert(encode(key))
 
+    /**
+     * Raw insert used by backup restore; mirrors the DAO's plain insert so restores keep the same
+     * conflict behavior they had before encryption was introduced.
+     */
+    suspend fun insertForImport(key: SshKey): Long = dao.insertForImport(encode(key))
+
     suspend fun deleteById(id: Long) = dao.deleteById(id)
 
     suspend fun generate(nameHint: String, passphrase: String = ""): KeyGenerationResult {

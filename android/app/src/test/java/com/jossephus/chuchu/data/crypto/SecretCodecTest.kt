@@ -1,29 +1,28 @@
 package com.jossephus.chuchu.data.crypto
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThrows
-import org.junit.Assert.assertTrue
-import org.junit.Test
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 /**
- * A JVM-only [SecretCodec] with the exact same envelope as [KeystoreSecretCodec]
- * (`v1:` + base64(iv||ciphertext||tag), 12-byte random IV, 128-bit tag) but a fixed
- * in-memory key, since `AndroidKeyStore` does not exist on the JVM.
+ * A JVM-only [SecretCodec] with the exact same envelope as [KeystoreSecretCodec] (`v1:` +
+ * base64(iv||ciphertext||tag), 12-byte random IV, 128-bit tag) but a fixed in-memory key, since
+ * `AndroidKeyStore` does not exist on the JVM.
  *
  * Lives here as shared test furniture: [SecretCodecTest] pins the envelope contract and
- * `SecretAtRestTest` injects this into the repositories to prove the database only ever
- * holds ciphertext, without Robolectric ever touching the keystore.
+ * `SecretAtRestTest` injects this into the repositories to prove the database only ever holds
+ * ciphertext, without Robolectric ever touching the keystore.
  */
-class FakeSecretCodec(
-    private val key: ByteArray = ByteArray(32) { (it * 7 + 1).toByte() },
-) : SecretCodec {
+class FakeSecretCodec(private val key: ByteArray = ByteArray(32) { (it * 7 + 1).toByte() }) :
+    SecretCodec {
 
     private val random = SecureRandom()
     private val secretKey = SecretKeySpec(key, "AES")
@@ -64,8 +63,8 @@ class FakeSecretCodec(
 }
 
 /**
- * Envelope contract for [SecretCodec]: what a stored value looks like, how legacy plaintext
- * stays readable, and that identical plaintexts never produce identical rows.
+ * Envelope contract for [SecretCodec]: what a stored value looks like, how legacy plaintext stays
+ * readable, and that identical plaintexts never produce identical rows.
  */
 class SecretCodecTest {
 
@@ -98,7 +97,8 @@ class SecretCodecTest {
             -----BEGIN OPENSSH PRIVATE KEY-----
             b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
             -----END OPENSSH PRIVATE KEY-----
-            """.trimIndent()
+            """
+                .trimIndent()
 
         val stored = codec.encrypt(pem)
 
