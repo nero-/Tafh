@@ -113,11 +113,13 @@ jobs:
           cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p tafh-backup
 
       # Signing material is per-repository: secrets do not transfer to a fork, and
-      # an unsigned APK cannot be installed. Fail here with an actionable message
-      # instead of publishing an artifact that silently does not install.
+      # an unsigned APK cannot be installed. Normalise whatever shape the pasted
+      # secret arrived in, then prove it is usable before building anything.
       - name: generate release key
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           set -euo pipefail
           RAW="${KEYSTORE_BASE64:-}"
@@ -125,33 +127,54 @@ jobs:
             echo "::error::KEYSTORE_BASE64 is not set. Add KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD (README, 'Signing')."
             exit 1
           fi
-          # A pasted secret can arrive quoted, wrapped across lines, as a data: URI,
-          # with CRLF, or with literal backslash-n escapes. Normalise all of those
-          # before decoding, then verify the result really is a keystore.
+          # Pasted secrets commonly arrive quoted, wrapped, CRLF-terminated, as a
+          # data: URI, with literal backslash-n escapes, or with the base64 '='
+          # padding stripped by a shell round-trip. Undo all of that here.
           S="$RAW"
           S="${S#\"}"; S="${S%\"}"; S="${S#\'}"; S="${S%\'}"
           S="${S#data:*base64,}"
           S="$(printf '%s' "$S" | sed 's/\\n//g')"
           S="$(printf '%s' "$S" | tr -- '-_' '+/')"
           S="$(printf '%s' "$S" | tr -cd 'A-Za-z0-9+/=')"
-          if ! printf '%s' "$S" | base64 -d > android/app/key.jks 2>/dev/null; then
-            echo "::error::KEYSTORE_BASE64 does not decode as base64 (length ${#S}). Re-create it with: base64 -w0 release.jks | tr -d '\n'"
+          REM=$(( ${#S} % 4 ))
+          if [ "$REM" -eq 2 ]; then S="${S}=="
+          elif [ "$REM" -eq 3 ]; then S="${S}="
+          elif [ "$REM" -eq 1 ]; then
+            echo "::error::KEYSTORE_BASE64 has a length that cannot be base64 (${#S} chars). Re-create it with: base64 -w0 release.jks"
             exit 1
+          fi
+          if ! printf '%s' "$S" | base64 -d > android/app/key.jks 2>/dev/null; then
+            echo "::error::KEYSTORE_BASE64 does not decode as base64."
+            exit 1
+          fi
+          # A double-encoded paste decodes to base64 text rather than binary.
+          MAGIC=$(od -An -tx1 -N4 android/app/key.jks | tr -d ' \n')
+          if [ "$MAGIC" != "feedfeed" ] && [ "${MAGIC:0:2}" != "30" ]; then
+            if head -c 64 android/app/key.jks | grep -qE '^[A-Za-z0-9+/=]+$'; then
+              echo "note: secret was base64-encoded twice; decoding again"
+              base64 -d < android/app/key.jks > android/app/key.decoded && mv android/app/key.decoded android/app/key.jks
+              MAGIC=$(od -An -tx1 -N4 android/app/key.jks | tr -d ' \n')
+            fi
           fi
           SIZE=$(wc -c < android/app/key.jks)
           if [ "$SIZE" -lt 512 ]; then
-            echo "::error::Decoded keystore is only ${SIZE} bytes; that cannot be a keystore. Did you paste a file path instead of its contents?"
+            echo "::error::Decoded keystore is only ${SIZE} bytes; that cannot be a keystore."
             exit 1
           fi
-          MAGIC=$(od -An -tx1 -N4 android/app/key.jks | tr -d ' \n')
           case "$MAGIC" in
             feedfeed*|30*) : ;;
             *)
-              echo "::error::Decoded file does not look like a JKS/PKCS12 keystore (magic ${MAGIC})."
+              echo "::error::Decoded file is not a JKS/PKCS12 keystore (magic ${MAGIC})."
               exit 1
               ;;
           esac
-          echo "keystore OK (${SIZE} bytes, magic ${MAGIC})"
+          # Final proof: the credentials must actually open this keystore.
+          if ! keytool -list -keystore android/app/key.jks -storepass "$KEYSTORE_PASSWORD" \
+                 -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::The keystore decoded, but KEYSTORE_PASSWORD / KEY_ALIAS do not open it. Check those two secrets."
+            exit 1
+          fi
+          echo "keystore OK (${SIZE} bytes, magic ${MAGIC}, alias ${KEY_ALIAS} present)"
 
       - name: build android release APK
         env:
