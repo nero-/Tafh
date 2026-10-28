@@ -215,6 +215,21 @@ class TerminalSessionEngine(
     // affordance without paying for a native scroll on every keystroke.
     @Volatile private var scrolledBack = false
 
+    // Latest requested geometry. The IME animation drives one resize per frame,
+    // and each one costs a native grid rebuild plus a remote SIGWINCH, so the
+    // applied size is coalesced and only sent when it has been stable briefly.
+    private data class ResizeRequest(
+        val cols: Int,
+        val rows: Int,
+        val cellWidth: Int,
+        val cellHeight: Int,
+        val screenWidth: Int,
+        val screenHeight: Int,
+    )
+
+    private var pendingResize: ResizeRequest? = null
+    private var resizeJob: Job? = null
+
     private val nativeVersion =
         if (bridge.isLoaded()) {
             runCatching { bridge.nativeVersion() }.getOrNull()
@@ -499,58 +514,80 @@ class TerminalSessionEngine(
         newScreenWidth: Int,
         newScreenHeight: Int,
     ) {
-        scope.launch(dispatcher) {
-            try {
-                if (newCols <= 0 || newRows <= 0) return@launch
-                if (newCellWidth <= 0 || newCellHeight <= 0) return@launch
-                cols = newCols
-                rows = newRows
-                cellWidth = newCellWidth
-                cellHeight = newCellHeight
-                screenWidth = newScreenWidth
-                screenHeight = newScreenHeight
-                if (handle != 0L) {
-                    withNativeLock {
-                        bridge.nativeResize(handle, cols, rows, cellWidth, cellHeight)
-                        // Flush pty output from the resize (e.g. the DEC 2048 in-band
-                        // size report) so Textual-based TUIs detect the resize.
-                        flushPtyWrites()
-                        bridge.nativeSetMouseEncodingSize(
-                            handle,
-                            screenWidth,
-                            screenHeight,
-                            cellWidth,
-                            cellHeight,
-                            0,
-                            0,
-                            0,
-                            0,
-                        )
-                        resizeRemote(cols, rows, ptyWidthPx(), ptyHeightPx())
-                    }
-                    requestSnapshot(force = true)
+        if (newCols <= 0 || newRows <= 0) return
+        if (newCellWidth <= 0 || newCellHeight <= 0) return
+        val request =
+            ResizeRequest(
+                newCols,
+                newRows,
+                newCellWidth,
+                newCellHeight,
+                newScreenWidth,
+                newScreenHeight,
+            )
+        pendingResize = request
+        // One timer per settled size: repeated calls keep overwriting
+        // `pendingResize` while the animation runs, and only the final geometry
+        // reaches the PTY.
+        resizeJob?.cancel()
+        resizeJob =
+            scope.launch(dispatcher) {
+                delay(RESIZE_SETTLE_MS)
+                val settled = pendingResize ?: return@launch
+                pendingResize = null
+                applyResize(settled)
+            }
+    }
+
+    private fun applyResize(request: ResizeRequest) {
+        try {
+            cols = request.cols
+            rows = request.rows
+            cellWidth = request.cellWidth
+            cellHeight = request.cellHeight
+            screenWidth = request.screenWidth
+            screenHeight = request.screenHeight
+            if (handle != 0L) {
+                withNativeLock {
+                    bridge.nativeResize(handle, cols, rows, cellWidth, cellHeight)
+                    // Flush pty output from the resize (e.g. the DEC 2048 in-band
+                    // size report) so Textual-based TUIs detect the resize.
+                    flushPtyWrites()
+                    bridge.nativeSetMouseEncodingSize(
+                        handle,
+                        screenWidth,
+                        screenHeight,
+                        cellWidth,
+                        cellHeight,
+                        0,
+                        0,
+                        0,
+                        0,
+                    )
+                    resizeRemote(cols, rows, ptyWidthPx(), ptyHeightPx())
                 }
-            } catch (e: Exception) {
-                Log.e("TerminalSession", "Resize failed", e)
-                val transport = lastConnectionParams?.transport
-                val shouldReconnect =
-                    !disconnectRequested &&
-                        lastConnectionParams != null &&
-                        readLoopExitAction(transport) == ReadLoopExitAction.AutomaticReconnect
-                if (shouldReconnect) {
-                    scheduleReconnect("Connection interrupted: ${e.message ?: "resize failed"}")
-                } else {
-                    if (transport == Transport.Mosh) {
-                        readJob?.cancel()
-                        readJob = null
-                        withNativeLock { moshService.close() }
-                    }
-                    _state.value =
-                        _state.value.copy(
-                            status = SessionStatus.Error,
-                            error = "Resize failed: ${e.message}",
-                        )
+                requestSnapshot(force = true)
+            }
+        } catch (e: Exception) {
+            Log.e("TerminalSession", "Resize failed", e)
+            val transport = lastConnectionParams?.transport
+            val shouldReconnect =
+                !disconnectRequested &&
+                    lastConnectionParams != null &&
+                    readLoopExitAction(transport) == ReadLoopExitAction.AutomaticReconnect
+            if (shouldReconnect) {
+                scheduleReconnect("Connection interrupted: ${e.message ?: "resize failed"}")
+            } else {
+                if (transport == Transport.Mosh) {
+                    readJob?.cancel()
+                    readJob = null
+                    withNativeLock { moshService.close() }
                 }
+                _state.value =
+                    _state.value.copy(
+                        status = SessionStatus.Error,
+                        error = "Resize failed: ${e.message}",
+                    )
             }
         }
     }
@@ -726,6 +763,11 @@ class TerminalSessionEngine(
         disconnectRequested = true
         reconnectJob?.cancel()
         reconnectJob = null
+        // A pending resize belongs to the session being torn down; applying it
+        // afterwards would resize the replacement session behind the user's back.
+        resizeJob?.cancel()
+        resizeJob = null
+        pendingResize = null
         lastConnectionParams = null
         cancelHostKeyPrompt()
         scope.launch(dispatcher) {

@@ -108,5 +108,15 @@ class SnapshotScheduler(
 /** Minimum spacing between two snapshot emissions (one 60 Hz frame). */
 const val SNAPSHOT_MIN_INTERVAL_MS: Long = 16L
 
+/**
+ * How long a requested geometry must stay unchanged before it is applied.
+ *
+ * The IME slide-in animation produces a new canvas size on every frame, and each applied size costs
+ * a native grid rebuild plus a remote SIGWINCH (which makes TUIs like vim/htop redraw everything).
+ * Coalescing on a short settle window turns that burst into the single resize the session should
+ * actually see.
+ */
+const val RESIZE_SETTLE_MS: Long = 120L
+
 /** Failed snapshot emissions retried before the frame budget is left alone. */
 const val MAX_SNAPSHOT_RETRIES: Int = 3

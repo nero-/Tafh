@@ -4,15 +4,18 @@ import android.view.KeyEvent
 
 object KeyMapper {
     fun map(keyCode: Int, codepoint: Int, metaState: Int): MappedKey? {
+        // Volume keys must fall through to the system (super.onKeyDown) so the rocker still
+        // changes volume while the terminal has focus.
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            return null
+        }
         val mods = translateMods(metaState)
         val mapped =
             when (keyCode) {
-                // Navigation and editing keys
-                KeyEvent.KEYCODE_DPAD_UP,
-                KeyEvent.KEYCODE_VOLUME_UP ->
+                // Navigation and editing keys.
+                KeyEvent.KEYCODE_DPAD_UP ->
                     MappedKey(key = TerminalSpecialKey.Up.engineKey, codepoint = 0, mods = mods)
-                KeyEvent.KEYCODE_DPAD_DOWN,
-                KeyEvent.KEYCODE_VOLUME_DOWN ->
+                KeyEvent.KEYCODE_DPAD_DOWN ->
                     MappedKey(key = TerminalSpecialKey.Down.engineKey, codepoint = 0, mods = mods)
                 KeyEvent.KEYCODE_DPAD_LEFT ->
                     MappedKey(key = TerminalSpecialKey.Left.engineKey, codepoint = 0, mods = mods)

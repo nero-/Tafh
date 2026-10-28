@@ -85,6 +85,12 @@ fun CommandPalette(
     val view = LocalView.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val entries = remember(tabs) { tabs.map { it to terminalTabDisplayLabel(it) } }
+    val sessionCountLabel =
+        when (entries.size) {
+            0 -> "no sessions"
+            1 -> "1 session"
+            else -> "${entries.size} sessions"
+        }
     val maxIndex = (entries.size - 1).coerceAtLeast(0)
     LaunchedEffect(entries.size) { onFocusedTabIndexChange(focusedTabIndex.coerceIn(0, maxIndex)) }
     LaunchedEffect(activeTabId, entries) {
@@ -126,7 +132,7 @@ fun CommandPalette(
                         modifier = Modifier.align(Alignment.Center),
                     )
                     ChuText(
-                        "${entries.size}/${tabs.size}",
+                        sessionCountLabel,
                         style = typography.labelSmall,
                         color = colors.textMuted,
                         modifier = Modifier.align(Alignment.CenterEnd),
