@@ -269,10 +269,13 @@ internal fun SshBackupSheet(
                                     title = "Export SSH backup",
                                     subtitle = "Authenticate to create an encrypted backup",
                                 ) { result ->
-                                    if (result == VerificationResult.Success || result == VerificationResult.Unavailable) {
+                                    // Export materialises every private key and password, so
+                                    // it requires a real authentication. `Unavailable` means no
+                                    // device credential is enrolled: fail closed instead of
+                                    // exporting unauthenticated.
+                                    if (result == VerificationResult.Success) {
                                         exportLauncher.launch(defaultBackupFileName())
                                     }
-                                    // On Failed, stay on the same step
                                 }
                             },
                             onCancel = {
@@ -293,10 +296,11 @@ internal fun SshBackupSheet(
                                     title = "Import SSH backup",
                                     subtitle = "Authenticate to restore an encrypted backup",
                                 ) { result ->
-                                    if (result == VerificationResult.Success || result == VerificationResult.Unavailable) {
+                                    // Import can install attacker-supplied keys and host
+                                    // profiles, so it also requires a real authentication.
+                                    if (result == VerificationResult.Success) {
                                         importLauncher.launch(arrayOf(CHUCHU_BACKUP_MIME_TYPE, "*/*"))
                                     }
-                                    // On Failed, stay on the same step
                                 }
                             },
                             onCancel = {

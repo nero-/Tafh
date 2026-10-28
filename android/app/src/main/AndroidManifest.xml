@@ -20,9 +20,11 @@
         android:extractNativeLibs="false">
         <activity
             android:name="com.jossephus.chuchu.MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density|fontScale"
             android:enabled="true"
             android:exported="true"
             android:label="@string/app_name"
+            android:resizeableActivity="true"
             android:windowSoftInputMode="adjustNothing"
             android:theme="@style/Theme.Chuchu">
             <intent-filter>

@@ -1,14 +1,28 @@
 package com.jossephus.chuchu.ui
 
 import android.app.Application
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -20,6 +34,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.jossephus.chuchu.data.repository.SettingsRepository
+import com.jossephus.chuchu.ui.components.ChuButton
+import com.jossephus.chuchu.ui.components.ChuButtonVariant
+import com.jossephus.chuchu.ui.components.ChuText
 import com.jossephus.chuchu.ui.screens.AddServer.AddServerScreen
 import com.jossephus.chuchu.ui.screens.AddServer.AddServerViewModel
 import com.jossephus.chuchu.ui.screens.Keys.KeysViewModel
@@ -31,6 +48,8 @@ import com.jossephus.chuchu.ui.screens.Terminal.TerminalScreen
 import com.jossephus.chuchu.ui.screens.Terminal.TerminalViewModel
 import com.jossephus.chuchu.ui.security.VerificationResult
 import com.jossephus.chuchu.ui.security.requireUserVerification
+import com.jossephus.chuchu.ui.theme.ChuColors
+import com.jossephus.chuchu.ui.theme.ChuTypography
 
 @Composable
 fun ApplicationNavController() {
@@ -38,9 +57,19 @@ fun ApplicationNavController() {
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val lifecycleOwner = LocalLifecycleOwner.current
-    var appUnlocked by rememberSaveable { mutableStateOf(false) }
-    var unlockPromptRequested by rememberSaveable { mutableStateOf(false) }
-    var appLockBlockedUntilToggle by rememberSaveable { mutableStateOf(false) }
+    val settingsRepo = SettingsRepository.getInstance(application)
+    val appLockEnabled by settingsRepo.appLockEnabled.collectAsStateWithLifecycle()
+    // Not rememberSaveable: an `appUnlocked = true` restored from a saved instance
+    // state (process death, task restore) would bypass the lock on relaunch.
+    var appUnlocked by remember { mutableStateOf(false) }
+    var unlockPromptRequested by remember { mutableStateOf(false) }
+    var appLockBlockedUntilToggle by remember { mutableStateOf(false) }
+
+    if (!appLockEnabled) {
+        appUnlocked = false
+        unlockPromptRequested = false
+        appLockBlockedUntilToggle = false
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { source, event ->
@@ -56,6 +85,40 @@ fun ApplicationNavController() {
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(appLockEnabled, appUnlocked, unlockPromptRequested, appLockBlockedUntilToggle) {
+        if (
+            appLockEnabled && !appUnlocked && !unlockPromptRequested && !appLockBlockedUntilToggle
+        ) {
+            unlockPromptRequested = true
+            requireUserVerification(
+                context = context,
+                title = "Unlock Chuchu",
+                subtitle = "Authenticate to continue",
+            ) { result ->
+                appUnlocked = result == VerificationResult.Success
+                if (result != VerificationResult.Success) {
+                    appLockBlockedUntilToggle = true
+                }
+                unlockPromptRequested = false
+            }
+        }
+    }
+
+    if (appLockEnabled && !appUnlocked) {
+        // Hard gate: while locked this is the only content composed, so no host
+        // list, settings screen, or terminal is reachable without authentication.
+        AppLockScreen(
+            blocked = appLockBlockedUntilToggle,
+            onUnlock = {
+                // Clearing both flags re-arms the LaunchedEffect above, which
+                // re-issues requireUserVerification.
+                appLockBlockedUntilToggle = false
+                unlockPromptRequested = false
+            },
+        )
+        return
     }
 
     NavHost(navController = navController, startDestination = "servers") {
@@ -235,29 +298,53 @@ fun ApplicationNavController() {
             )
         }
     }
+}
 
-    val settingsRepo = SettingsRepository.getInstance(application)
-    val appLockEnabled by settingsRepo.appLockEnabled.collectAsStateWithLifecycle()
-    if (!appLockEnabled) {
-        appUnlocked = false
-        unlockPromptRequested = false
-        appLockBlockedUntilToggle = false
-    }
-    LaunchedEffect(appLockEnabled, appUnlocked, unlockPromptRequested, appLockBlockedUntilToggle) {
-        if (
-            appLockEnabled && !appUnlocked && !unlockPromptRequested && !appLockBlockedUntilToggle
+/**
+ * Opaque full-screen cover shown while the app lock is enabled and the app is not
+ * unlocked. It is the only content composed in that state, so no host list, tab,
+ * or terminal is reachable without authentication.
+ */
+@Composable
+private fun AppLockScreen(
+    blocked: Boolean,
+    onUnlock: () -> Unit,
+) {
+    val colors = ChuColors.current
+    val typography = ChuTypography.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            unlockPromptRequested = true
-            requireUserVerification(
-                context = context,
-                title = "Unlock Chuchu",
-                subtitle = "Authenticate to continue",
-            ) { result ->
-                appUnlocked = result == VerificationResult.Success
-                if (result != VerificationResult.Success) {
-                    appLockBlockedUntilToggle = true
-                }
-                unlockPromptRequested = false
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ChuText("$ ", style = typography.headline, color = colors.textMuted)
+                ChuText("chuchu", style = typography.headline)
+            }
+            ChuText(
+                text = if (blocked) {
+                    "Authentication failed. Tap Unlock to try again."
+                } else {
+                    "App lock is enabled. Authenticate to continue."
+                },
+                style = typography.body,
+                color = colors.textSecondary,
+            )
+            ChuButton(
+                onClick = onUnlock,
+                variant = ChuButtonVariant.Outlined,
+                bracketed = true,
+            ) {
+                ChuText("Unlock", style = typography.label, color = colors.textSecondary)
             }
         }
     }

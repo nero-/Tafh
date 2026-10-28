@@ -4,10 +4,14 @@
         <!-- SSH private keys, host passwords, passphrases, and trusted host keys are backed up only through Chuchu's encrypted local export flow. -->
         <exclude domain="database" path="." />
         <exclude domain="sharedpref" path="." />
+        <!-- Local shell HOME lives in filesDir; keep user-written files out of cloud backups. -->
+        <exclude domain="file" path="." />
     </cloud-backup>
     <device-transfer>
         <!-- Device-to-device transfer must not move plaintext local secrets outside the encrypted export flow. -->
         <exclude domain="database" path="." />
         <exclude domain="sharedpref" path="." />
+        <!-- Local shell HOME lives in filesDir; keep user-written files out of cloud backups. -->
+        <exclude domain="file" path="." />
     </device-transfer>
 </data-extraction-rules>

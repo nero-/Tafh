@@ -3,4 +3,7 @@
     <!-- SSH private keys, host passwords, passphrases, and trusted host keys are backed up only through Chuchu's encrypted local export flow. -->
     <exclude domain="database" path="." />
     <exclude domain="sharedpref" path="." />
+    <!-- The local shell runs with HOME=filesDir, so shell history and anything the
+         user writes there (including ~/.ssh) must not leave the device in cleartext. -->
+    <exclude domain="file" path="." />
 </full-backup-content>

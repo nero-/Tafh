@@ -12,10 +12,22 @@
 -renamesourcefileattribute SourceFile
 
 # === JNI: keep native bridge classes ===
+# Every class that declares `external fun` must keep those members, otherwise
+# R8 renames/strips them and the .so cannot bind: release builds then fail with
+# UnsatisfiedLinkError even though debug works.
 -keepclassmembers class com.jossephus.chuchu.service.terminal.GhosttyBridge {
     *** native*;
 }
 -keepclassmembers class com.jossephus.chuchu.service.ssh.NativeSshBridge {
+    *** native*;
+}
+-keepclassmembers class com.jossephus.chuchu.service.mosh.NativeMoshBridge {
+    *** native*;
+}
+-keepclassmembers class com.jossephus.chuchu.service.terminal.NativeLocalShellBridge {
+    *** native*;
+}
+-keepclassmembers class com.jossephus.chuchu.service.backup.NativeBackupBridge {
     *** native*;
 }
 
