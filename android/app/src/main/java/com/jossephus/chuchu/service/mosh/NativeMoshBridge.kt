@@ -2,9 +2,8 @@ package com.jossephus.chuchu.service.mosh
 
 class NativeMoshBridge {
     companion object {
-        private val loadError: Throwable? = runCatching {
-            System.loadLibrary("chuchu_jni")
-        }.exceptionOrNull()
+        private val loadError: Throwable? =
+            runCatching { System.loadLibrary("chuchu_jni") }.exceptionOrNull()
     }
 
     fun isLoaded(): Boolean = loadError == null
@@ -19,10 +18,15 @@ class NativeMoshBridge {
     }
 
     external fun nativeCreate(configJson: String): Long
+
     external fun nativeStart(handle: Long): Int
+
     external fun nativeSendInput(handle: Long, data: ByteArray): Int
+
     external fun nativeResize(handle: Long, cols: Int, rows: Int): Int
+
     external fun nativeMaintenanceTick(handle: Long): Int
+
     external fun nativePumpNetwork(handle: Long): Int
 
     /// outBuf: byte array to receive payload (host bytes or diagnostic text).
@@ -30,10 +34,12 @@ class NativeMoshBridge {
     /// Returns 0 on success, non-zero on error.
     external fun nativePollOutput(handle: Long, outBuf: ByteArray, outMeta: LongArray): Int
 
-    /// outState: long[7] array receiving [state, lastFailure, lastSent, lastReceived, pendingOut, pendingHostOps, rtoMs].
+    /// outState: long[7] array receiving [state, lastFailure, lastSent, lastReceived, pendingOut,
+    // pendingHostOps, rtoMs].
     /// Returns 0 on success.
     external fun nativePollState(handle: Long, outState: LongArray): Int
 
     external fun nativeStop(handle: Long): Int
+
     external fun nativeDestroy(handle: Long): Int
 }

@@ -17,14 +17,15 @@ object ZmxMultiplexer : Multiplexer {
             .mapNotNull { line ->
                 val trimmed = line.trim()
                 if (trimmed.isBlank()) return@mapNotNull null
-                val fields = trimmed
-                    .split('\t')
-                    .mapNotNull { part ->
-                        val separator = part.indexOf('=')
-                        if (separator <= 0) return@mapNotNull null
-                        part.substring(0, separator) to part.substring(separator + 1)
-                    }
-                    .toMap()
+                val fields =
+                    trimmed
+                        .split('\t')
+                        .mapNotNull { part ->
+                            val separator = part.indexOf('=')
+                            if (separator <= 0) return@mapNotNull null
+                            part.substring(0, separator) to part.substring(separator + 1)
+                        }
+                        .toMap()
                 val name = fields["name"]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 RemoteMultiplexerSession(
                     name = name,
@@ -50,11 +51,11 @@ object ZmxMultiplexer : Multiplexer {
     override fun defaultSessionName(
         remoteSessions: Collection<RemoteMultiplexerSession>,
         localSessionNames: Collection<String>,
-    ): String = MultiplexerSessionAllocator.nextChuchuSessionName(
-        remoteSessions = remoteSessions,
-        localSessionNames = localSessionNames,
-    )
+    ): String =
+        MultiplexerSessionAllocator.nextChuchuSessionName(
+            remoteSessions = remoteSessions,
+            localSessionNames = localSessionNames,
+        )
 
-    private fun shellQuote(value: String): String =
-        "'" + value.replace("'", "'\\''") + "'"
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }

@@ -8,8 +8,9 @@ class Ed25519KeyGenerator(private val bridge: NativeSshBridge = NativeSshBridge(
         val comment = "$normalizedName@chuchu"
         val effectivePassphrase = passphrase.ifBlank { null }
 
-        val result = bridge.nativeGenerateEd25519Key(comment, effectivePassphrase)
-            ?: throw IllegalStateException("Native Ed25519 key generation failed")
+        val result =
+            bridge.nativeGenerateEd25519Key(comment, effectivePassphrase)
+                ?: throw IllegalStateException("Native Ed25519 key generation failed")
 
         return SshKey(
             name = normalizedName,

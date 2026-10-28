@@ -1,12 +1,11 @@
 package com.jossephus.chuchu.ui.terminal
 
 /**
- * Ghostty input.Key enum values (c_int backed, sequential from 0).
- * These are layout-independent physical key codes based on the W3C standard.
- * See: https://www.w3.org/TR/uievents-code
+ * Ghostty input.Key enum values (c_int backed, sequential from 0). These are layout-independent
+ * physical key codes based on the W3C standard. See: https://www.w3.org/TR/uievents-code
  *
- * IMPORTANT: These values must match the Ghostty Key enum declaration order exactly.
- * Reference: ghostty-vt src/input/key.zig
+ * IMPORTANT: These values must match the Ghostty Key enum declaration order exactly. Reference:
+ * ghostty-vt src/input/key.zig
  */
 object GhosttyKey {
     const val unidentified = 0
@@ -105,57 +104,84 @@ object GhosttyKey {
 }
 
 /**
- * Map a Unicode character to its Ghostty physical key code,
- * or null if there is no direct mapping (uncommon punctuation, etc.).
+ * Map a Unicode character to its Ghostty physical key code, or null if there is no direct mapping
+ * (uncommon punctuation, etc.).
  */
-fun Char.toGhosttyKey(): Int? = when (this) {
-    'a', 'A' -> GhosttyKey.keyA
-    'b', 'B' -> GhosttyKey.keyB
-    'c', 'C' -> GhosttyKey.keyC
-    'd', 'D' -> GhosttyKey.keyD
-    'e', 'E' -> GhosttyKey.keyE
-    'f', 'F' -> GhosttyKey.keyF
-    'g', 'G' -> GhosttyKey.keyG
-    'h', 'H' -> GhosttyKey.keyH
-    'i', 'I' -> GhosttyKey.keyI
-    'j', 'J' -> GhosttyKey.keyJ
-    'k', 'K' -> GhosttyKey.keyK
-    'l', 'L' -> GhosttyKey.keyL
-    'm', 'M' -> GhosttyKey.keyM
-    'n', 'N' -> GhosttyKey.keyN
-    'o', 'O' -> GhosttyKey.keyO
-    'p', 'P' -> GhosttyKey.keyP
-    'q', 'Q' -> GhosttyKey.keyQ
-    'r', 'R' -> GhosttyKey.keyR
-    's', 'S' -> GhosttyKey.keyS
-    't', 'T' -> GhosttyKey.keyT
-    'u', 'U' -> GhosttyKey.keyU
-    'v', 'V' -> GhosttyKey.keyV
-    'w', 'W' -> GhosttyKey.keyW
-    'x', 'X' -> GhosttyKey.keyX
-    'y', 'Y' -> GhosttyKey.keyY
-    'z', 'Z' -> GhosttyKey.keyZ
-    '0' -> GhosttyKey.digit0
-    '1' -> GhosttyKey.digit1
-    '2' -> GhosttyKey.digit2
-    '3' -> GhosttyKey.digit3
-    '4' -> GhosttyKey.digit4
-    '5' -> GhosttyKey.digit5
-    '6' -> GhosttyKey.digit6
-    '7' -> GhosttyKey.digit7
-    '8' -> GhosttyKey.digit8
-    '9' -> GhosttyKey.digit9
-    ' ' -> GhosttyKey.space
-    '`' -> GhosttyKey.backquote
-    '-' -> GhosttyKey.minus
-    '=' -> GhosttyKey.equal
-    '[' -> GhosttyKey.bracketLeft
-    ']' -> GhosttyKey.bracketRight
-    '\\' -> GhosttyKey.backslash
-    ';' -> GhosttyKey.semicolon
-    '\'' -> GhosttyKey.quote
-    ',' -> GhosttyKey.comma
-    '.' -> GhosttyKey.period
-    '/' -> GhosttyKey.slash
-    else -> null
-}
+fun Char.toGhosttyKey(): Int? =
+    when (this) {
+        'a',
+        'A' -> GhosttyKey.keyA
+        'b',
+        'B' -> GhosttyKey.keyB
+        'c',
+        'C' -> GhosttyKey.keyC
+        'd',
+        'D' -> GhosttyKey.keyD
+        'e',
+        'E' -> GhosttyKey.keyE
+        'f',
+        'F' -> GhosttyKey.keyF
+        'g',
+        'G' -> GhosttyKey.keyG
+        'h',
+        'H' -> GhosttyKey.keyH
+        'i',
+        'I' -> GhosttyKey.keyI
+        'j',
+        'J' -> GhosttyKey.keyJ
+        'k',
+        'K' -> GhosttyKey.keyK
+        'l',
+        'L' -> GhosttyKey.keyL
+        'm',
+        'M' -> GhosttyKey.keyM
+        'n',
+        'N' -> GhosttyKey.keyN
+        'o',
+        'O' -> GhosttyKey.keyO
+        'p',
+        'P' -> GhosttyKey.keyP
+        'q',
+        'Q' -> GhosttyKey.keyQ
+        'r',
+        'R' -> GhosttyKey.keyR
+        's',
+        'S' -> GhosttyKey.keyS
+        't',
+        'T' -> GhosttyKey.keyT
+        'u',
+        'U' -> GhosttyKey.keyU
+        'v',
+        'V' -> GhosttyKey.keyV
+        'w',
+        'W' -> GhosttyKey.keyW
+        'x',
+        'X' -> GhosttyKey.keyX
+        'y',
+        'Y' -> GhosttyKey.keyY
+        'z',
+        'Z' -> GhosttyKey.keyZ
+        '0' -> GhosttyKey.digit0
+        '1' -> GhosttyKey.digit1
+        '2' -> GhosttyKey.digit2
+        '3' -> GhosttyKey.digit3
+        '4' -> GhosttyKey.digit4
+        '5' -> GhosttyKey.digit5
+        '6' -> GhosttyKey.digit6
+        '7' -> GhosttyKey.digit7
+        '8' -> GhosttyKey.digit8
+        '9' -> GhosttyKey.digit9
+        ' ' -> GhosttyKey.space
+        '`' -> GhosttyKey.backquote
+        '-' -> GhosttyKey.minus
+        '=' -> GhosttyKey.equal
+        '[' -> GhosttyKey.bracketLeft
+        ']' -> GhosttyKey.bracketRight
+        '\\' -> GhosttyKey.backslash
+        ';' -> GhosttyKey.semicolon
+        '\'' -> GhosttyKey.quote
+        ',' -> GhosttyKey.comma
+        '.' -> GhosttyKey.period
+        '/' -> GhosttyKey.slash
+        else -> null
+    }

@@ -26,9 +26,7 @@ import kotlinx.coroutines.withContext
 
 internal const val BACKUP_MIN_PASSPHRASE_LENGTH = 8
 
-class SettingsBackupViewModel(
-    application: Application,
-) : AndroidViewModel(application) {
+class SettingsBackupViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         fun factory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -78,12 +76,8 @@ class SettingsBackupViewModel(
     private var cachedPayload: BackupPayload? = null
 
     init {
-        viewModelScope.launch {
-            db.sshKeyDao().observeAll().collect { _keys.value = it }
-        }
-        viewModelScope.launch {
-            db.hostProfileDao().observeAll().collect { _hosts.value = it }
-        }
+        viewModelScope.launch { db.sshKeyDao().observeAll().collect { _keys.value = it } }
+        viewModelScope.launch { db.hostProfileDao().observeAll().collect { _hosts.value = it } }
     }
 
     // ── Passphrase state setters ──────────────────────────────────────────────
@@ -112,8 +106,8 @@ class SettingsBackupViewModel(
     // ── Export ────────────────────────────────────────────────────────────────
 
     /**
-     * Called from the Sheet composable after device auth succeeds and SAF returns
-     * a writeable URI. Encrypts the backup in memory and writes to the URI.
+     * Called from the Sheet composable after device auth succeeds and SAF returns a writeable URI.
+     * Encrypts the backup in memory and writes to the URI.
      */
     fun performExport(uri: Uri) {
         if (_isBusy.value || !exportPassphraseValid()) return
@@ -123,9 +117,8 @@ class SettingsBackupViewModel(
             _success.value = null
             val passphrase = _exportPassphrase.value.toCharArray()
             try {
-                val encryptedBytes = withContext(Dispatchers.IO) {
-                    backupRepo.createEncryptedBackup(passphrase)
-                }
+                val encryptedBytes =
+                    withContext(Dispatchers.IO) { backupRepo.createEncryptedBackup(passphrase) }
                 withContext(Dispatchers.IO) {
                     val context = getApplication<Application>()
                     context.contentResolver.openOutputStream(uri)?.use { output ->
@@ -148,8 +141,8 @@ class SettingsBackupViewModel(
     // ── Import ────────────────────────────────────────────────────────────────
 
     /**
-     * Called from the Sheet composable after device auth succeeds and SAF returns
-     * a readable URI. Reads bytes, decrypts, and plans the import.
+     * Called from the Sheet composable after device auth succeeds and SAF returns a readable URI.
+     * Reads bytes, decrypts, and plans the import.
      */
     fun performImport(uri: Uri) {
         if (_isBusy.value || !importPassphraseValid()) return
@@ -161,16 +154,13 @@ class SettingsBackupViewModel(
             cachedPayload = null
             val passphrase = _importPassphrase.value.toCharArray()
             try {
-                val bytes = withContext(Dispatchers.IO) {
-                    readBackupBytes(uri)
-                }
-                val payload = withContext(Dispatchers.IO) {
-                    backupRepo.readEncryptedBackup(bytes, passphrase)
-                }
+                val bytes = withContext(Dispatchers.IO) { readBackupBytes(uri) }
+                val payload =
+                    withContext(Dispatchers.IO) {
+                        backupRepo.readEncryptedBackup(bytes, passphrase)
+                    }
                 cachedPayload = payload
-                val plan = withContext(Dispatchers.IO) {
-                    backupRepo.planImport(payload)
-                }
+                val plan = withContext(Dispatchers.IO) { backupRepo.planImport(payload) }
                 _importPassphrase.value = ""
                 _importPlan.value = plan
             } catch (_: InvalidBackupPassphraseException) {
@@ -199,9 +189,7 @@ class SettingsBackupViewModel(
         viewModelScope.launch {
             _error.value = null
             try {
-                val result = withContext(Dispatchers.IO) {
-                    backupRepo.importPayload(payload)
-                }
+                val result = withContext(Dispatchers.IO) { backupRepo.importPayload(payload) }
                 val parts = mutableListOf<String>()
                 if (result.importedKeys > 0) parts += "${result.importedKeys} key(s)"
                 if (result.reusedKeys > 0) parts += "${result.reusedKeys} reused"

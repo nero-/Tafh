@@ -75,9 +75,8 @@ class ChuchuBackupCoreTest {
         val oversizedName = "x".repeat((4 * 1024 * 1024) + 1)
 
         ChuchuBackupCodec.encodePayload(
-            samplePayload().copy(
-                keys = listOf(BackupSshKey.fromEntity(sampleKey(name = oversizedName))),
-            ),
+            samplePayload()
+                .copy(keys = listOf(BackupSshKey.fromEntity(sampleKey(name = oversizedName))))
         )
     }
 
@@ -86,16 +85,18 @@ class ChuchuBackupCoreTest {
         val existing = sampleKey(id = 50L, name = "main")
         val conflicting = sampleKey(id = 1L, name = "main", privateKeyPem = "DIFFERENT")
         val identical = BackupSshKey.fromEntity(existing.copy(id = 2L))
-        val payload = BackupPayload(
-            keys = listOf(identical, BackupSshKey.fromEntity(conflicting)),
-            hosts = emptyList(),
-        )
+        val payload =
+            BackupPayload(
+                keys = listOf(identical, BackupSshKey.fromEntity(conflicting)),
+                hosts = emptyList(),
+            )
 
-        val plan = ChuchuBackupImportPlanner.planImport(
-            payload = payload,
-            existingKeys = listOf(existing),
-            existingHosts = emptyList(),
-        )
+        val plan =
+            ChuchuBackupImportPlanner.planImport(
+                payload = payload,
+                existingKeys = listOf(existing),
+                existingHosts = emptyList(),
+            )
 
         assertEquals(1, plan.keyReuseCount)
         assertEquals(1, plan.keyInsertCount)
@@ -107,16 +108,18 @@ class ChuchuBackupCoreTest {
 
     @Test
     fun importPlanNeverPreservesExportedPrimaryKeys() {
-        val payload = BackupPayload(
-            keys = listOf(BackupSshKey.fromEntity(sampleKey(id = 10L, name = "new"))),
-            hosts = listOf(BackupHostProfile.fromEntity(sampleHost(id = 10L, keyId = 10L))),
-        )
+        val payload =
+            BackupPayload(
+                keys = listOf(BackupSshKey.fromEntity(sampleKey(id = 10L, name = "new"))),
+                hosts = listOf(BackupHostProfile.fromEntity(sampleHost(id = 10L, keyId = 10L))),
+            )
 
-        val plan = ChuchuBackupImportPlanner.planImport(
-            payload = payload,
-            existingKeys = listOf(sampleKey(id = 10L, name = "local")),
-            existingHosts = listOf(sampleHost(id = 10L, name = "local-host", keyId = null)),
-        )
+        val plan =
+            ChuchuBackupImportPlanner.planImport(
+                payload = payload,
+                existingKeys = listOf(sampleKey(id = 10L, name = "local")),
+                existingHosts = listOf(sampleHost(id = 10L, name = "local-host", keyId = null)),
+            )
 
         val insertKey = plan.keyActions.filterIsInstance<KeyImportAction.Insert>().single()
         val insertHost = plan.hostActions.single()
@@ -129,16 +132,18 @@ class ChuchuBackupCoreTest {
     @Test
     fun importPlanRemapsHostsToReusedLocalKeyIds() {
         val existing = sampleKey(id = 77L, name = "main")
-        val payload = BackupPayload(
-            keys = listOf(BackupSshKey.fromEntity(existing.copy(id = 1L))),
-            hosts = listOf(BackupHostProfile.fromEntity(sampleHost(id = 2L, keyId = 1L))),
-        )
+        val payload =
+            BackupPayload(
+                keys = listOf(BackupSshKey.fromEntity(existing.copy(id = 1L))),
+                hosts = listOf(BackupHostProfile.fromEntity(sampleHost(id = 2L, keyId = 1L))),
+            )
 
-        val plan = ChuchuBackupImportPlanner.planImport(
-            payload = payload,
-            existingKeys = listOf(existing),
-            existingHosts = emptyList(),
-        )
+        val plan =
+            ChuchuBackupImportPlanner.planImport(
+                payload = payload,
+                existingKeys = listOf(existing),
+                existingHosts = emptyList(),
+            )
 
         assertEquals(77L, plan.hostActions.single().host.keyId)
         assertNull(plan.hostActions.single().keyActionIndex)
@@ -146,16 +151,18 @@ class ChuchuBackupCoreTest {
 
     @Test
     fun importPlanTracksInsertedKeyForDeferredHostRemap() {
-        val payload = BackupPayload(
-            keys = listOf(BackupSshKey.fromEntity(sampleKey(id = 1L, name = "main"))),
-            hosts = listOf(BackupHostProfile.fromEntity(sampleHost(id = 2L, keyId = 1L))),
-        )
+        val payload =
+            BackupPayload(
+                keys = listOf(BackupSshKey.fromEntity(sampleKey(id = 1L, name = "main"))),
+                hosts = listOf(BackupHostProfile.fromEntity(sampleHost(id = 2L, keyId = 1L))),
+            )
 
-        val plan = ChuchuBackupImportPlanner.planImport(
-            payload = payload,
-            existingKeys = emptyList(),
-            existingHosts = emptyList(),
-        )
+        val plan =
+            ChuchuBackupImportPlanner.planImport(
+                payload = payload,
+                existingKeys = emptyList(),
+                existingHosts = emptyList(),
+            )
 
         assertNull(plan.hostActions.single().host.keyId)
         assertEquals(0, plan.hostActions.single().keyActionIndex)
@@ -163,10 +170,11 @@ class ChuchuBackupCoreTest {
 
     @Test(expected = BackupFormatException::class)
     fun importPlanRejectsMissingKeyReferences() {
-        val payload = BackupPayload(
-            keys = emptyList(),
-            hosts = listOf(BackupHostProfile.fromEntity(sampleHost(id = 2L, keyId = 1L))),
-        )
+        val payload =
+            BackupPayload(
+                keys = emptyList(),
+                hosts = listOf(BackupHostProfile.fromEntity(sampleHost(id = 2L, keyId = 1L))),
+            )
 
         ChuchuBackupImportPlanner.planImport(
             payload = payload,
@@ -177,9 +185,14 @@ class ChuchuBackupCoreTest {
 
     @Test(expected = BackupFormatException::class)
     fun payloadDecodeRejectsUnknownEnums() {
-        val payload = samplePayload().copy(
-            hosts = listOf(BackupHostProfile.fromEntity(sampleHost(authMethod = AuthMethod.Key))),
-        )
+        val payload =
+            samplePayload()
+                .copy(
+                    hosts =
+                        listOf(
+                            BackupHostProfile.fromEntity(sampleHost(authMethod = AuthMethod.Key))
+                        )
+                )
         val encoded = ChuchuBackupCodec.encodePayload(payload)
         replaceLastAscii(encoded, "Key", "Bog")
 
@@ -228,23 +241,25 @@ class ChuchuBackupCoreTest {
         assumeTrue("native backup bridge unavailable in this JVM", NativeBackupBridge().isLoaded())
     }
 
-    private fun samplePayload(): BackupPayload = BackupPayload(
-        keys = listOf(BackupSshKey.fromEntity(sampleKey())),
-        hosts = listOf(BackupHostProfile.fromEntity(sampleHost())),
-    )
+    private fun samplePayload(): BackupPayload =
+        BackupPayload(
+            keys = listOf(BackupSshKey.fromEntity(sampleKey())),
+            hosts = listOf(BackupHostProfile.fromEntity(sampleHost())),
+        )
 
     private fun sampleKey(
         id: Long = 1L,
         name: String = "main",
         privateKeyPem: String = "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
-    ): SshKey = SshKey(
-        id = id,
-        name = name,
-        algorithm = "ED25519",
-        privateKeyPem = privateKeyPem,
-        publicKeyOpenSsh = "ssh-ed25519 AAAA test",
-        createdAtEpochMs = 1234L,
-    )
+    ): SshKey =
+        SshKey(
+            id = id,
+            name = name,
+            algorithm = "ED25519",
+            privateKeyPem = privateKeyPem,
+            publicKeyOpenSsh = "ssh-ed25519 AAAA test",
+            createdAtEpochMs = 1234L,
+        )
 
     private fun sampleHost(
         id: Long = 2L,
@@ -252,21 +267,22 @@ class ChuchuBackupCoreTest {
         keyId: Long? = 1L,
         authMethod: AuthMethod = AuthMethod.KeyWithPassphrase,
         transport: Transport = Transport.Mosh,
-    ): HostProfile = HostProfile(
-        id = id,
-        name = name,
-        host = "example.com",
-        port = 2222,
-        username = "salem",
-        password = "saved-password",
-        keyId = keyId,
-        keyPassphrase = "key-passphrase",
-        transport = transport,
-        authMethod = authMethod,
-        requireAuthOnConnect = true,
-        postConnectCommand = "echo hello",
-        multiplexer = MultiplexerType.Tmux,
-    )
+    ): HostProfile =
+        HostProfile(
+            id = id,
+            name = name,
+            host = "example.com",
+            port = 2222,
+            username = "salem",
+            password = "saved-password",
+            keyId = keyId,
+            keyPassphrase = "key-passphrase",
+            transport = transport,
+            authMethod = authMethod,
+            requireAuthOnConnect = true,
+            postConnectCommand = "echo hello",
+            multiplexer = MultiplexerType.Tmux,
+        )
 
     private fun encodedNullableStringSize(value: String): Int =
         1 + Int.SIZE_BYTES + value.toByteArray(Charsets.UTF_8).size

@@ -16,9 +16,9 @@ import org.robolectric.annotation.Config
 /**
  * Robolectric tests for [HostKeyStore].
  *
- * Unlike the pure-JVM suites, these exercise the real Android framework pieces the store
- * depends on: [android.util.Base64] and real [android.content.SharedPreferences] persistence,
- * so keys survive across store instances exactly like they do on device.
+ * Unlike the pure-JVM suites, these exercise the real Android framework pieces the store depends
+ * on: [android.util.Base64] and real [android.content.SharedPreferences] persistence, so keys
+ * survive across store instances exactly like they do on device.
  *
  * Robolectric runs on the JVM with no device or emulator required.
  */
@@ -42,10 +42,7 @@ class HostKeyStoreTest {
     fun `unknown host before anything is saved`() {
         val check = newStore().check("example.com", 22, "ssh-ed25519", keyBytes)
         assertTrue(check is HostKeyCheck.Unknown)
-        assertEquals(
-            "SHA256:",
-            (check as HostKeyCheck.Unknown).fingerprint.take("SHA256:".length),
-        )
+        assertEquals("SHA256:", (check as HostKeyCheck.Unknown).fingerprint.take("SHA256:".length))
     }
 
     @Test
@@ -77,7 +74,9 @@ class HostKeyStoreTest {
 
         assertEquals(HostKeyCheck.Match, store.check("example.com", 22, "ssh-ed25519", keyBytes))
         assertTrue(store.check("other.com", 22, "ssh-ed25519", keyBytes) is HostKeyCheck.Unknown)
-        assertTrue(store.check("example.com", 2222, "ssh-ed25519", keyBytes) is HostKeyCheck.Unknown)
+        assertTrue(
+            store.check("example.com", 2222, "ssh-ed25519", keyBytes) is HostKeyCheck.Unknown
+        )
         assertTrue(store.check("example.com", 22, "ssh-rsa", keyBytes) is HostKeyCheck.Unknown)
     }
 

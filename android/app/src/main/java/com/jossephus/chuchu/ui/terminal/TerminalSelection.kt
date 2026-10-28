@@ -19,10 +19,7 @@ import com.jossephus.chuchu.service.terminal.TerminalSnapshot
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-data class TerminalSelection(
-    val anchorIndex: Int,
-    val focusIndex: Int,
-) {
+data class TerminalSelection(val anchorIndex: Int, val focusIndex: Int) {
     fun normalized(cellCount: Int): IntRange? {
         if (cellCount <= 0) return null
         val start = minOf(anchorIndex, focusIndex).coerceIn(0, cellCount - 1)
@@ -31,12 +28,10 @@ data class TerminalSelection(
     }
 
     fun withStart(newStartCell: Int, updateAnchor: Boolean): TerminalSelection =
-        if (updateAnchor) copy(anchorIndex = newStartCell)
-        else copy(focusIndex = newStartCell)
+        if (updateAnchor) copy(anchorIndex = newStartCell) else copy(focusIndex = newStartCell)
 
     fun withEnd(newEndCell: Int, updateAnchor: Boolean): TerminalSelection =
-        if (updateAnchor) copy(anchorIndex = newEndCell)
-        else copy(focusIndex = newEndCell)
+        if (updateAnchor) copy(anchorIndex = newEndCell) else copy(focusIndex = newEndCell)
 }
 
 data class TerminalSelectionState(
@@ -85,13 +80,15 @@ internal fun TerminalSnapshot.wordAt(cellIndex: Int): IntRange? {
 internal fun extractSelectionText(snapshot: TerminalSnapshot, range: IntRange): String? {
     if (snapshot.cols <= 0 || snapshot.codepoints.isEmpty()) return null
 
-    val normalizedRange = IntRange(
-        start = range.first.coerceIn(0, snapshot.codepoints.lastIndex),
-        endInclusive = range.last.coerceIn(0, snapshot.codepoints.lastIndex),
-    )
+    val normalizedRange =
+        IntRange(
+            start = range.first.coerceIn(0, snapshot.codepoints.lastIndex),
+            endInclusive = range.last.coerceIn(0, snapshot.codepoints.lastIndex),
+        )
     val startRow = normalizedRange.first / snapshot.cols
     val endRow = normalizedRange.last / snapshot.cols
-    val builder = StringBuilder(normalizedRange.last - normalizedRange.first + 1 + (endRow - startRow))
+    val builder =
+        StringBuilder(normalizedRange.last - normalizedRange.first + 1 + (endRow - startRow))
 
     for (row in startRow..endRow) {
         val rowStart = row * snapshot.cols
@@ -144,17 +141,29 @@ internal fun buildSelectionState(
     val boundsBottom = (endRow + 1) * cellHeight
 
     val screenOffset = snapshot.viewportScrollY * cols
-    val screenStart = (minOf(selection.anchorIndex, selection.focusIndex) + screenOffset)
-        .coerceAtLeast(0)
-    val screenEnd = (maxOf(selection.anchorIndex, selection.focusIndex) + screenOffset)
-        .coerceAtLeast(screenStart)
-    val text = if (terminalHandle != 0L && snapshot.cols > 0) {
-        val screenText = ghosttyBridge.nativeFormatSelectionScreenRange(terminalHandle, screenStart, screenEnd)
-        screenText
-            ?: ghosttyBridge.nativeFormatSelectionRange(terminalHandle, visibleRange.first, visibleRange.last)
-    } else {
-        extractSelectionText(snapshot, visibleRange)
-    }
+    val screenStart =
+        (minOf(selection.anchorIndex, selection.focusIndex) + screenOffset).coerceAtLeast(0)
+    val screenEnd =
+        (maxOf(selection.anchorIndex, selection.focusIndex) + screenOffset).coerceAtLeast(
+            screenStart
+        )
+    val text =
+        if (terminalHandle != 0L && snapshot.cols > 0) {
+            val screenText =
+                ghosttyBridge.nativeFormatSelectionScreenRange(
+                    terminalHandle,
+                    screenStart,
+                    screenEnd,
+                )
+            screenText
+                ?: ghosttyBridge.nativeFormatSelectionRange(
+                    terminalHandle,
+                    visibleRange.first,
+                    visibleRange.last,
+                )
+        } else {
+            extractSelectionText(snapshot, visibleRange)
+        }
     return TerminalSelectionState(
         boundsLeft = boundsLeft,
         boundsTop = boundsTop,
@@ -192,8 +201,7 @@ internal fun TerminalSelectionHandle(
 
     Box(
         modifier =
-            Modifier
-                .offset { IntOffset(originX, originY) }
+            Modifier.offset { IntOffset(originX, originY) }
                 .size(44.dp)
                 .pointerInput(cellWidthPx, cellHeightPx, cols) {
                     var accumX = 0f
@@ -206,7 +214,8 @@ internal fun TerminalSelectionHandle(
                             startCell = startCellProvider()
                         },
                         onDrag = { _, dragAmount ->
-                            if (cellWidthPx <= 0f || cellHeightPx <= 0f || cols <= 0) return@detectDragGestures
+                            if (cellWidthPx <= 0f || cellHeightPx <= 0f || cols <= 0)
+                                return@detectDragGestures
                             accumX += dragAmount.x
                             accumY += dragAmount.y
                             val dCol = (accumX / cellWidthPx).roundToInt()
@@ -215,7 +224,7 @@ internal fun TerminalSelectionHandle(
                             onDragToCell(newCell)
                         },
                     )
-                },
+                }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val cx = size.width / 2f
@@ -227,7 +236,11 @@ internal fun TerminalSelectionHandle(
                 end = Offset(cx, size.height),
                 strokeWidth = 2.dp.toPx(),
             )
-            drawCircle(color = borderColor, radius = ballRadiusPx + 1.dp.toPx(), center = ballCenter)
+            drawCircle(
+                color = borderColor,
+                radius = ballRadiusPx + 1.dp.toPx(),
+                center = ballCenter,
+            )
             drawCircle(color = color, radius = ballRadiusPx, center = ballCenter)
         }
     }

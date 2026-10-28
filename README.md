@@ -96,6 +96,16 @@ cd android && ./gradlew assembleDebug
 
 The APK should include `lib/arm64-v8a/libchuchu_jni.so`; without it native SSH/key generation will fail on device.
 
+Without nix, export `ANDROID_NDK_HOME` (the NDK path) and `ANDROID_HOME` (the SDK path), and put Zig 0.15.2 on `PATH` (or pass `ZIG=/path/to/zig`). Then:
+
+```sh
+make test          # Android JVM unit tests (no NDK needed)
+make native-test   # Zig bridge unit tests
+make fmt-check     # ktfmt --set-exit-if-changed
+make lint          # ktlint with android/.editorconfig
+make native-fmt-check
+```
+
 ## Inspiration
 
 I have been using [vvterm](https://github.com/vivy-company/vvterm) on iOS for the past few weeks and i really liked it.  This project came from my desire to have native ssh client but for android.

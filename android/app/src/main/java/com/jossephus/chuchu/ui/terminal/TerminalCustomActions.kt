@@ -28,10 +28,7 @@ enum class CustomActionModifier(val label: String, val flag: String) {
     Enter("Enter", "enter"),
 }
 
-data class DecodedCustomActionValue(
-    val text: String,
-    val modifiers: Set<CustomActionModifier>,
-)
+data class DecodedCustomActionValue(val text: String, val modifiers: Set<CustomActionModifier>)
 
 private const val MOD_PREFIX = "[[chu_mods:"
 private const val MOD_SUFFIX = "]]"
@@ -39,9 +36,7 @@ private const val MOD_SUFFIX = "]]"
 fun encodeCustomActionValue(baseValue: String, modifiers: Set<CustomActionModifier>): String {
     if (baseValue.isEmpty()) return ""
     if (modifiers.isEmpty()) return baseValue
-    val flags = CustomActionModifier.entries
-        .filter { it in modifiers }
-        .map { it.flag }
+    val flags = CustomActionModifier.entries.filter { it in modifiers }.map { it.flag }
     return "$MOD_PREFIX${flags.joinToString(",")}$MOD_SUFFIX$baseValue"
 }
 
@@ -53,15 +48,14 @@ fun decodeCustomActionValue(payload: String): DecodedCustomActionValue {
     if (suffixIndex <= MOD_PREFIX.length) {
         return DecodedCustomActionValue(text = payload, modifiers = emptySet())
     }
-    val flags = payload
-        .substring(MOD_PREFIX.length, suffixIndex)
-        .split(',')
-        .map { it.trim().lowercase() }
-        .filter { it.isNotEmpty() }
-        .toSet()
-    val modifiers = CustomActionModifier.entries
-        .filter { it.flag in flags }
-        .toSet()
+    val flags =
+        payload
+            .substring(MOD_PREFIX.length, suffixIndex)
+            .split(',')
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+    val modifiers = CustomActionModifier.entries.filter { it.flag in flags }.toSet()
     return DecodedCustomActionValue(
         text = payload.substring(suffixIndex + MOD_SUFFIX.length),
         modifiers = modifiers,
@@ -82,12 +76,13 @@ object TerminalCustomActionStore {
     // from the JSON, matching the previous conditional-put behavior.
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val defaultGroups: List<TerminalCustomKeyGroup> = listOf(
-        TerminalCustomKeyGroup(
-            keyLabel = "qv",
-            actions = listOf(TerminalCustomAction(label = "qv", payload = ":q")),
-        ),
-    )
+    private val defaultGroups: List<TerminalCustomKeyGroup> =
+        listOf(
+            TerminalCustomKeyGroup(
+                keyLabel = "qv",
+                actions = listOf(TerminalCustomAction(label = "qv", payload = ":q")),
+            )
+        )
 
     fun defaultGroups(): List<TerminalCustomKeyGroup> = defaultGroups
 
@@ -97,22 +92,24 @@ object TerminalCustomActionStore {
         groups.forEach { group ->
             val key = group.keyLabel.trim()
             if (key.isEmpty() || key in seen) return@forEach
-            val actions = group.actions.mapNotNull { action ->
-                val label = action.label.trim()
-                val payload = action.payload
-                if (label.isEmpty() || payload.isEmpty()) return@mapNotNull null
-                // Lowercase so the stored shortcut matches runtime key matching
-                // (which lowercases) and the chuchu hint display. Clamped to one char
-                // because ChuchuKeyBindings only binds single-char shortcuts; a longer
-                // value would persist and display but never fire. takeLast matches the
-                // editor field, so typing and normalizing agree on which char wins.
-                val shortcut = action.shortcut
-                    ?.trim()
-                    ?.takeLast(1)
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.lowercase()
-                TerminalCustomAction(label = label, payload = payload, shortcut = shortcut)
-            }
+            val actions =
+                group.actions.mapNotNull { action ->
+                    val label = action.label.trim()
+                    val payload = action.payload
+                    if (label.isEmpty() || payload.isEmpty()) return@mapNotNull null
+                    // Lowercase so the stored shortcut matches runtime key matching
+                    // (which lowercases) and the chuchu hint display. Clamped to one char
+                    // because ChuchuKeyBindings only binds single-char shortcuts; a longer
+                    // value would persist and display but never fire. takeLast matches the
+                    // editor field, so typing and normalizing agree on which char wins.
+                    val shortcut =
+                        action.shortcut
+                            ?.trim()
+                            ?.takeLast(1)
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.lowercase()
+                    TerminalCustomAction(label = label, payload = payload, shortcut = shortcut)
+                }
             if (actions.isEmpty()) return@forEach
             seen += key
             normalized += TerminalCustomKeyGroup(keyLabel = key, actions = actions)
@@ -123,22 +120,22 @@ object TerminalCustomActionStore {
     fun parse(raw: String?): List<TerminalCustomKeyGroup> {
         if (raw == null) return defaultGroups
         if (raw.isBlank()) return emptyList()
-        val parsed = try {
-            json.decodeFromString<List<TerminalCustomKeyGroup>>(raw)
-        } catch (_: SerializationException) {
-            // Migration: actions saved before the JSON switch used a delimited
-            // "keyLabel=label::payload|..." string. The shortcut field is new, so
-            // legacy entries never carried one — split on the first "::" only, which
-            // preserves any "::" inside the payload. Re-saving rewrites it as JSON.
-            parseLegacy(raw)
-        }
+        val parsed =
+            try {
+                json.decodeFromString<List<TerminalCustomKeyGroup>>(raw)
+            } catch (_: SerializationException) {
+                // Migration: actions saved before the JSON switch used a delimited
+                // "keyLabel=label::payload|..." string. The shortcut field is new, so
+                // legacy entries never carried one — split on the first "::" only, which
+                // preserves any "::" inside the payload. Re-saving rewrites it as JSON.
+                parseLegacy(raw)
+            }
 
         return normalize(parsed).ifEmpty { defaultGroups }
     }
 
     private fun parseLegacy(raw: String): List<TerminalCustomKeyGroup> {
-        return raw
-            .lineSequence()
+        return raw.lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .mapNotNull { line ->
@@ -147,9 +144,8 @@ object TerminalCustomActionStore {
                 val keyLabel = keySplit[0].trim()
                 val actionSection = keySplit[1]
                 if (keyLabel.isEmpty()) return@mapNotNull null
-                val actions = actionSection
-                    .split("|")
-                    .mapNotNull { actionToken ->
+                val actions =
+                    actionSection.split("|").mapNotNull { actionToken ->
                         val parts = actionToken.split("::", limit = 2)
                         if (parts.size != 2) return@mapNotNull null
                         val label = parts[0].trim()

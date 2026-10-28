@@ -28,22 +28,20 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Robolectric + Roborazzi screenshot capture: renders real app Composables with the real
- * theme system on the JVM (no device or emulator) and writes actual PNGs under
- * build/outputs/roborazzi/. See:
- *   app/build/outputs/roborazzi/dark-theme-components.png
- *   app/build/outputs/roborazzi/light-theme-components.png
+ * Robolectric + Roborazzi screenshot capture: renders real app Composables with the real theme
+ * system on the JVM (no device or emulator) and writes actual PNGs under build/outputs/roborazzi/.
+ * See: app/build/outputs/roborazzi/dark-theme-components.png
+ * app/build/outputs/roborazzi/light-theme-components.png
  *
- * Screenshot testing (compare/verify) can be layered on later via the Roborazzi Gradle
- * plugin's record/verify tasks; for now this just proves the render pipeline works.
+ * Screenshot testing (compare/verify) can be layered on later via the Roborazzi Gradle plugin's
+ * record/verify tasks; for now this just proves the render pipeline works.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w411dp-h891dp-420dpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ThemeScreenshotTest {
 
-    @get:Rule
-    val composeRule = createComposeRule()
+    @get:Rule val composeRule = createComposeRule()
 
     @Test
     fun `dark theme renders app components`() {
@@ -65,31 +63,26 @@ class ThemeScreenshotTest {
                 // otherwise the default white window shows through.
                 Box(modifier = Modifier.fillMaxSize().background(ChuColors.current.background)) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                    ChuText(
-                        text = themeName,
-                        style = ChuTypography.current.title,
-                    )
-                    ChuCard {
-                        ChuText(
-                            text = "Keep screen awake while connected",
-                            modifier = Modifier.padding(12.dp),
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ChuButton(onClick = {}) { ChuText("Connect") }
-                        ChuButton(onClick = {}, variant = ChuButtonVariant.Outlined) {
-                            ChuText("Disconnect")
+                        ChuText(text = themeName, style = ChuTypography.current.title)
+                        ChuCard {
+                            ChuText(
+                                text = "Keep screen awake while connected",
+                                modifier = Modifier.padding(12.dp),
+                            )
                         }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ChuSwitch(checked = true, onCheckedChange = {})
-                        ChuSwitch(checked = false, onCheckedChange = {})
-                    }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ChuButton(onClick = {}) { ChuText("Connect") }
+                            ChuButton(onClick = {}, variant = ChuButtonVariant.Outlined) {
+                                ChuText("Disconnect")
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ChuSwitch(checked = true, onCheckedChange = {})
+                            ChuSwitch(checked = false, onCheckedChange = {})
+                        }
                     }
                 }
             }

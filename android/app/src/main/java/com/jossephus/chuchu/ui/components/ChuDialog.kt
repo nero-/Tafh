@@ -8,13 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.unit.dp
 import com.jossephus.chuchu.ui.theme.ChuColors
 import com.jossephus.chuchu.ui.theme.ChuTypography
 
@@ -33,16 +33,14 @@ fun ChuDialog(
     val typography = ChuTypography.current
     val shape = RectangleShape
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = properties,
-    ) {
+    Dialog(onDismissRequest = onDismiss, properties = properties) {
         Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .background(colors.surfaceVariant, shape)
-                .border(BorderStroke(1.dp, colors.border), shape)
-                .padding(14.dp),
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .background(colors.surfaceVariant, shape)
+                    .border(BorderStroke(1.dp, colors.border), shape)
+                    .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ChuText(text = title, style = typography.title)
@@ -59,10 +57,7 @@ fun ChuDialog(
                 ) {
                     ChuText(dismissLabel, style = typography.label, color = colors.textMuted)
                 }
-                ChuButton(
-                    onClick = onConfirm,
-                    bracketed = true,
-                ) {
+                ChuButton(onClick = onConfirm, bracketed = true) {
                     ChuText(confirmLabel, style = typography.label, color = colors.onAccent)
                 }
             }

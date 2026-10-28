@@ -22,10 +22,7 @@ object TmuxMultiplexer : Multiplexer {
                 if (trimmed.isBlank()) return@mapNotNull null
                 val parts = trimmed.split('\t')
                 if (parts.isEmpty() || parts[0].isBlank()) return@mapNotNull null
-                RemoteMultiplexerSession(
-                    name = parts[0],
-                    attached = parts.getOrNull(1) == "1",
-                )
+                RemoteMultiplexerSession(name = parts[0], attached = parts.getOrNull(1) == "1")
             }
             .toList()
 
@@ -33,19 +30,21 @@ object TmuxMultiplexer : Multiplexer {
         sessionName: String,
         createIfMissing: Boolean,
         trustedRemoteName: Boolean,
-    ): String = if (createIfMissing) {
-        interactiveAttachOrSwitchCommand(sessionName, trustedRemoteName)
-    } else {
-        interactiveAttachExistingCommand(sessionName, trustedRemoteName)
-    }
+    ): String =
+        if (createIfMissing) {
+            interactiveAttachOrSwitchCommand(sessionName, trustedRemoteName)
+        } else {
+            interactiveAttachExistingCommand(sessionName, trustedRemoteName)
+        }
 
     override fun defaultSessionName(
         remoteSessions: Collection<RemoteMultiplexerSession>,
         localSessionNames: Collection<String>,
-    ): String = MultiplexerSessionAllocator.nextChuchuSessionName(
-        remoteSessions = remoteSessions,
-        localSessionNames = localSessionNames,
-    )
+    ): String =
+        MultiplexerSessionAllocator.nextChuchuSessionName(
+            remoteSessions = remoteSessions,
+            localSessionNames = localSessionNames,
+        )
 
     fun isGeneratedSessionName(name: String): Boolean = chuchuSessionRegex.matches(name)
 
@@ -76,6 +75,5 @@ object TmuxMultiplexer : Multiplexer {
             "else printf 'tmux session %s is no longer available\\n' $target; exec \"\${SHELL:-/bin/sh}\" -l; fi"
     }
 
-    private fun shellQuote(value: String): String =
-        "'" + value.replace("'", "'\\''") + "'"
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }

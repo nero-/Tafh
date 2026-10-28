@@ -14,7 +14,8 @@ class RsaKeyGenerator {
         generator.initialize(bits)
         val pair = generator.generateKeyPair()
         val privatePem = encodePrivateKeyPem(pair.private.encoded)
-        val publicOpenSsh = encodeRsaPublicKeyOpenSsh(pair.public as RSAPublicKey, "$normalizedName@chuchu")
+        val publicOpenSsh =
+            encodeRsaPublicKeyOpenSsh(pair.public as RSAPublicKey, "$normalizedName@chuchu")
         return SshKey(
             name = normalizedName,
             privateKeyPem = privatePem,
@@ -24,19 +25,18 @@ class RsaKeyGenerator {
     }
 
     private fun encodePrivateKeyPem(privateDer: ByteArray): String {
-        val body = Base64.encodeToString(privateDer, Base64.NO_WRAP)
-            .chunked(64)
-            .joinToString("\n")
+        val body = Base64.encodeToString(privateDer, Base64.NO_WRAP).chunked(64).joinToString("\n")
         return "-----BEGIN PRIVATE KEY-----\n$body\n-----END PRIVATE KEY-----\n"
     }
 
     private fun encodeRsaPublicKeyOpenSsh(publicKey: RSAPublicKey, comment: String): String {
-        val blob = ByteArrayOutputStream().use { out ->
-            writeSshString(out, "ssh-rsa".toByteArray(StandardCharsets.US_ASCII))
-            writeMpInt(out, publicKey.publicExponent.toByteArray())
-            writeMpInt(out, publicKey.modulus.toByteArray())
-            out.toByteArray()
-        }
+        val blob =
+            ByteArrayOutputStream().use { out ->
+                writeSshString(out, "ssh-rsa".toByteArray(StandardCharsets.US_ASCII))
+                writeMpInt(out, publicKey.publicExponent.toByteArray())
+                writeMpInt(out, publicKey.modulus.toByteArray())
+                out.toByteArray()
+            }
         val payload = Base64.encodeToString(blob, Base64.NO_WRAP)
         return "ssh-rsa $payload $comment"
     }

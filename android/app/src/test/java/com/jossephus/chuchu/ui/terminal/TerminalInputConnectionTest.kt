@@ -13,11 +13,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Robolectric coverage for the IME translation state machine in
- * [TerminalInputView].
+ * Robolectric coverage for the IME translation state machine in [TerminalInputView].
  *
- * Every assertion compares the exact character stream handed to the terminal, so a
- * stale mirror cannot silently over-emit backspaces or swallow a delete.
+ * Every assertion compares the exact character stream handed to the terminal, so a stale mirror
+ * cannot silently over-emit backspaces or swallow a delete.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])

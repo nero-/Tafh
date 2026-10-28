@@ -6,6 +6,19 @@ plugins {
     id("kotlin-kapt")
 }
 
+// Release signing is opt-in: it is wired up only when the local keystore and all
+// three credential env vars exist. Otherwise `assembleRelease` produces an
+// unsigned APK instead of failing on a half-configured signing config.
+val releaseKeystoreFile = file("key.jks")
+val releaseKeystorePassword = System.getenv("KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("KEY_ALIAS")
+val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+val releaseSigningConfigured =
+    releaseKeystoreFile.exists() &&
+        releaseKeystorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null
+
 android {
     namespace = "com.jossephus.chuchu"
     compileSdk {
@@ -31,33 +44,33 @@ android {
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: (releaseBase * 1_000)
         versionName = System.getenv("VERSION_NAME") ?: "$major.$minor.$patch"
 
-        System.getenv("ANDROID_ABI_FILTERS")
+        // Only these ABIs have a libchuchu_jni.so produced by the native build.
+        // Advertising all four Android ABIs would ship an APK whose native bridge
+        // silently reports "not loaded" on 32-bit devices.
+        val selectedAbis = System.getenv("ANDROID_ABI_FILTERS")
             ?.split(',')
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
             ?.takeIf { it.isNotEmpty() }
-            ?.let { filters ->
-                ndk {
-                    abiFilters += filters
-                }
-            }
+            ?: listOf("arm64-v8a", "x86_64")
+
+        ndk {
+            abiFilters += selectedAbis
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     }
 
     signingConfigs {
-        create("release") {
-            val keystoreFile = file("key.jks")
-            val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-            val keyAliasEnv = System.getenv("KEY_ALIAS")
-            val keyPasswordEnv = System.getenv("KEY_PASSWORD")
-
-            if (keystorePassword != null && keyAliasEnv != null && keyPasswordEnv != null && keystoreFile.exists()) {
-                storeFile = keystoreFile
-                storePassword = keystorePassword
-                keyAlias = keyAliasEnv
-                keyPassword = keyPasswordEnv
+        // Only created when the keystore is present; an unconfigured release
+        // signing config makes AGP fail validation even if nothing uses it.
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -66,7 +79,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            // Null when no keystore is configured, so `assembleRelease` produces
+            // an unsigned APK instead of aborting on missing signing material.
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

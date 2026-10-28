@@ -10,7 +10,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4.4.4
+
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
   nightly:
+    needs: test
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -21,8 +43,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
 
       - name: nix shell
         run: nix develop -L --verbose

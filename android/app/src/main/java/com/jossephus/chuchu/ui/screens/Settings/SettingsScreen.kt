@@ -73,6 +73,8 @@ fun SettingsScreen(
     onKeepScreenAwakeChanged: (Boolean) -> Unit,
     onHideScreenContentsChanged: (Boolean) -> Unit,
     onDisableAutocorrectChanged: (Boolean) -> Unit,
+    remoteClipboardWriteEnabled: Boolean = false,
+    onRemoteClipboardWriteEnabledChanged: (Boolean) -> Unit = {},
     onAccessoryLayoutChanged: (List<String>) -> Unit,
     onAccessoryBarSingleRowChanged: (Boolean) -> Unit,
     currentTerminalFontSize: Float = 14f,
@@ -176,6 +178,9 @@ fun SettingsScreen(
                             requireAuthOnConnect = requireAuthOnConnect,
                             onAppLockEnabledChanged = onAppLockEnabledChanged,
                             onRequireAuthOnConnectChanged = onRequireAuthOnConnectChanged,
+                            remoteClipboardWriteEnabled = remoteClipboardWriteEnabled,
+                            onRemoteClipboardWriteEnabledChanged =
+                                onRemoteClipboardWriteEnabledChanged,
                             onOpenBackup = { showBackupSheet = true },
                         )
                     SettingsCategory.Terminal ->
@@ -259,6 +264,8 @@ private fun GeneralSettings(
     requireAuthOnConnect: Boolean,
     onAppLockEnabledChanged: (Boolean) -> Unit,
     onRequireAuthOnConnectChanged: (Boolean) -> Unit,
+    remoteClipboardWriteEnabled: Boolean = false,
+    onRemoteClipboardWriteEnabledChanged: (Boolean) -> Unit = {},
     onOpenBackup: () -> Unit = {},
 ) {
     val typography = ChuTypography.current
@@ -301,6 +308,24 @@ private fun GeneralSettings(
     Spacer(modifier = Modifier.height(4.dp))
     ChuText(
         "use biometrics or device PIN/pattern.",
+        style = typography.bodySmall,
+        color = colors.textMuted,
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ChuText("allow remote clipboard writes", style = typography.label)
+        ChuSwitch(
+            checked = remoteClipboardWriteEnabled,
+            onCheckedChange = onRemoteClipboardWriteEnabledChanged,
+        )
+    }
+    Spacer(modifier = Modifier.height(4.dp))
+    ChuText(
+        "lets programs in the active session set this device's clipboard (OSC 52).",
         style = typography.bodySmall,
         color = colors.textMuted,
     )

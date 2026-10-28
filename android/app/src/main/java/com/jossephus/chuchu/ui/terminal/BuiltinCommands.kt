@@ -8,10 +8,9 @@ import kotlinx.serialization.json.Json
 /**
  * The fixed set of "chuchu command" builtins a user can bind a shortcut key to.
  *
- * Single source of truth for the command id (persisted), the display label, the
- * settings description, and the default shortcut key. Mirrors the label-carrying enum
- * pattern used by [CustomActionModifier]. Enum order is the order shown in settings and
- * in the hint bar.
+ * Single source of truth for the command id (persisted), the display label, the settings
+ * description, and the default shortcut key. Mirrors the label-carrying enum pattern used by
+ * [CustomActionModifier]. Enum order is the order shown in settings and in the hint bar.
  */
 enum class BuiltinCommand(
     val id: String,
@@ -31,12 +30,12 @@ enum class BuiltinCommand(
 }
 
 /**
- * Persistence for builtin-command shortcut keys, stored as a single JSON string
- * (command id -> single key char; empty value = command hidden).
+ * Persistence for builtin-command shortcut keys, stored as a single JSON string (command id ->
+ * single key char; empty value = command hidden).
  *
- * Uses kotlinx.serialization so any key char — including `:`, `,`, `;`, quotes — is
- * safe, mirroring [TerminalCustomActionStore]. The pref key is new on this branch, so
- * there is no legacy delimited format to migrate.
+ * Uses kotlinx.serialization so any key char — including `:`, `,`, `;`, quotes — is safe, mirroring
+ * [TerminalCustomActionStore]. The pref key is new on this branch, so there is no legacy delimited
+ * format to migrate.
  */
 object BuiltinShortcutStore {
     private val json = Json { ignoreUnknownKeys = true }

@@ -4,9 +4,7 @@ import android.content.SharedPreferences
 import android.util.Base64
 import java.security.MessageDigest
 
-class HostKeyStore(
-    private val prefs: SharedPreferences,
-) {
+class HostKeyStore(private val prefs: SharedPreferences) {
     companion object {
         const val PREFS_NAME = "host_keys"
     }
@@ -21,12 +19,7 @@ class HostKeyStore(
         prefs.edit().putString(key(host, port, algorithm), encoded).apply()
     }
 
-    fun check(
-        host: String,
-        port: Int,
-        algorithm: String,
-        keyBytes: ByteArray,
-    ): HostKeyCheck {
+    fun check(host: String, port: Int, algorithm: String, keyBytes: ByteArray): HostKeyCheck {
         val existing = loadKey(host, port, algorithm)
         return when {
             existing == null -> HostKeyCheck.Unknown(fingerprint = fingerprintSha256(keyBytes))
@@ -39,8 +32,7 @@ class HostKeyStore(
         }
     }
 
-    private fun key(host: String, port: Int, algorithm: String): String =
-        "$host:$port:$algorithm"
+    private fun key(host: String, port: Int, algorithm: String): String = "$host:$port:$algorithm"
 
     private fun fingerprintSha256(keyBytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(keyBytes)
@@ -51,9 +43,8 @@ class HostKeyStore(
 
 sealed interface HostKeyCheck {
     data object Match : HostKeyCheck
+
     data class Unknown(val fingerprint: String) : HostKeyCheck
-    data class Changed(
-        val previousFingerprint: String,
-        val fingerprint: String,
-    ) : HostKeyCheck
+
+    data class Changed(val previousFingerprint: String, val fingerprint: String) : HostKeyCheck
 }

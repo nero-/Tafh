@@ -13,19 +13,21 @@ data class ModifierState(
     val shift: Boolean = false,
     val cmd: Boolean = false,
 ) {
-    fun toggle(modifier: TerminalModifier): ModifierState = when (modifier) {
-        TerminalModifier.Ctrl -> copy(ctrl = !ctrl)
-        TerminalModifier.Alt -> copy(alt = !alt)
-        TerminalModifier.Shift -> copy(shift = !shift)
-        TerminalModifier.Cmd -> copy(cmd = !cmd)
-    }
+    fun toggle(modifier: TerminalModifier): ModifierState =
+        when (modifier) {
+            TerminalModifier.Ctrl -> copy(ctrl = !ctrl)
+            TerminalModifier.Alt -> copy(alt = !alt)
+            TerminalModifier.Shift -> copy(shift = !shift)
+            TerminalModifier.Cmd -> copy(cmd = !cmd)
+        }
 
-    fun isEnabled(modifier: TerminalModifier): Boolean = when (modifier) {
-        TerminalModifier.Ctrl -> ctrl
-        TerminalModifier.Alt -> alt
-        TerminalModifier.Shift -> shift
-        TerminalModifier.Cmd -> cmd
-    }
+    fun isEnabled(modifier: TerminalModifier): Boolean =
+        when (modifier) {
+            TerminalModifier.Ctrl -> ctrl
+            TerminalModifier.Alt -> alt
+            TerminalModifier.Shift -> shift
+            TerminalModifier.Cmd -> cmd
+        }
 
     fun hasActiveModifiers(): Boolean = ctrl || alt || shift || cmd
 
@@ -33,8 +35,8 @@ data class ModifierState(
         var mods = 0
         if (shift) mods = mods or (1 shl 0) // shift
         if (ctrl) mods = mods or (1 shl 1) // ctrl
-        if (alt) mods = mods or (1 shl 2)  // alt
-        if (cmd) mods = mods or (1 shl 3)  // super
+        if (alt) mods = mods or (1 shl 2) // alt
+        if (cmd) mods = mods or (1 shl 3) // super
         return mods
     }
 
@@ -47,17 +49,18 @@ data class ModifierState(
     }
 
     private fun ctrlModifiedChar(char: Char): String {
-        val code = when (char) {
-            '@' -> 0
-            '[' -> 27
-            '\\' -> 28
-            ']' -> 29
-            '^' -> 30
-            '_' -> 31
-            in 'a'..'z' -> char.code - 96
-            in 'A'..'Z' -> char.code - 64
-            else -> char.code
-        }
+        val code =
+            when (char) {
+                '@' -> 0
+                '[' -> 27
+                '\\' -> 28
+                ']' -> 29
+                '^' -> 30
+                '_' -> 31
+                in 'a'..'z' -> char.code - 96
+                in 'A'..'Z' -> char.code - 64
+                else -> char.code
+            }
         return code.toChar().toString()
     }
 }
@@ -105,11 +108,7 @@ sealed interface AccessoryAction {
     data object Paste : AccessoryAction
 }
 
-data class AccessoryKeyItem(
-    val id: String,
-    val label: String,
-    val action: AccessoryAction,
-)
+data class AccessoryKeyItem(val id: String, val label: String, val action: AccessoryAction)
 
 data class AccessoryKeyGroup(
     val id: String,
@@ -122,13 +121,19 @@ sealed interface ResolvedAccessoryEntry {
     val label: String
 
     data class Single(val item: AccessoryKeyItem) : ResolvedAccessoryEntry {
-        override val id: String get() = item.id
-        override val label: String get() = item.label
+        override val id: String
+            get() = item.id
+
+        override val label: String
+            get() = item.label
     }
 
     data class Group(val group: AccessoryKeyGroup) : ResolvedAccessoryEntry {
-        override val id: String get() = group.id
-        override val label: String get() = group.label
+        override val id: String
+            get() = group.id
+
+        override val label: String
+            get() = group.label
     }
 }
 
@@ -141,101 +146,207 @@ data class AccessoryDispatchResult(
 )
 
 object TerminalAccessoryDispatcher {
-    fun dispatch(
-        action: AccessoryAction,
-        modifierState: ModifierState,
-    ): AccessoryDispatchResult = when (action) {
-        is AccessoryAction.ToggleModifier -> AccessoryDispatchResult(
-            modifierState = modifierState.toggle(action.modifier),
-        )
+    fun dispatch(action: AccessoryAction, modifierState: ModifierState): AccessoryDispatchResult =
+        when (action) {
+            is AccessoryAction.ToggleModifier ->
+                AccessoryDispatchResult(modifierState = modifierState.toggle(action.modifier))
 
-        is AccessoryAction.SendSpecialKey -> AccessoryDispatchResult(
-            modifierState = modifierState,
-            specialKey = action.key,
-            suppressImeInput = true,
-        )
+            is AccessoryAction.SendSpecialKey ->
+                AccessoryDispatchResult(
+                    modifierState = modifierState,
+                    specialKey = action.key,
+                    suppressImeInput = true,
+                )
 
-        is AccessoryAction.SendText -> AccessoryDispatchResult(
-            modifierState = modifierState,
-            text = modifierState.applyToText(action.text),
-        )
+            is AccessoryAction.SendText ->
+                AccessoryDispatchResult(
+                    modifierState = modifierState,
+                    text = modifierState.applyToText(action.text),
+                )
 
-        AccessoryAction.Paste -> AccessoryDispatchResult(
-            modifierState = modifierState,
-            shouldPaste = true,
-        )
-    }
+            AccessoryAction.Paste ->
+                AccessoryDispatchResult(modifierState = modifierState, shouldPaste = true)
+        }
 }
 
 object TerminalAccessoryLayoutStore {
-    private val catalogItems: List<AccessoryKeyItem> = listOf(
-        AccessoryKeyItem("tab", "Tab", AccessoryAction.SendSpecialKey(TerminalSpecialKey.Tab)),
-        AccessoryKeyItem("enter", TerminalSpecialKey.Enter.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Enter)),
-        AccessoryKeyItem("space", "Space", AccessoryAction.SendText(" ")),
-        AccessoryKeyItem("escape", "Esc", AccessoryAction.SendSpecialKey(TerminalSpecialKey.Escape)),
-        AccessoryKeyItem("ctrl", "Ctrl", AccessoryAction.ToggleModifier(TerminalModifier.Ctrl)),
-        AccessoryKeyItem("cmd", "Cmd", AccessoryAction.ToggleModifier(TerminalModifier.Cmd)),
-        AccessoryKeyItem("alt", "Alt", AccessoryAction.ToggleModifier(TerminalModifier.Alt)),
-        AccessoryKeyItem("shift", "Shift", AccessoryAction.ToggleModifier(TerminalModifier.Shift)),
-        AccessoryKeyItem("up", TerminalSpecialKey.Up.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Up)),
-        AccessoryKeyItem("down", TerminalSpecialKey.Down.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Down)),
-        AccessoryKeyItem("left", TerminalSpecialKey.Left.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Left)),
-        AccessoryKeyItem("right", TerminalSpecialKey.Right.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Right)),
-        AccessoryKeyItem("home", TerminalSpecialKey.Home.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Home)),
-        AccessoryKeyItem("end", TerminalSpecialKey.End.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.End)),
-        AccessoryKeyItem("page_up", TerminalSpecialKey.PageUp.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.PageUp)),
-        AccessoryKeyItem("page_down", TerminalSpecialKey.PageDown.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.PageDown)),
-        AccessoryKeyItem("insert", TerminalSpecialKey.Insert.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Insert)),
-        AccessoryKeyItem("delete", TerminalSpecialKey.Delete.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Delete)),
-        AccessoryKeyItem("backspace", TerminalSpecialKey.Backspace.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.Backspace)),
-        AccessoryKeyItem("minus", "-", AccessoryAction.SendText("-")),
-        AccessoryKeyItem("slash", "/", AccessoryAction.SendText("/")),
-        AccessoryKeyItem("f1", TerminalSpecialKey.F1.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F1)),
-        AccessoryKeyItem("f2", TerminalSpecialKey.F2.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F2)),
-        AccessoryKeyItem("f3", TerminalSpecialKey.F3.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F3)),
-        AccessoryKeyItem("f4", TerminalSpecialKey.F4.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F4)),
-        AccessoryKeyItem("f5", TerminalSpecialKey.F5.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F5)),
-        AccessoryKeyItem("f6", TerminalSpecialKey.F6.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F6)),
-        AccessoryKeyItem("f7", TerminalSpecialKey.F7.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F7)),
-        AccessoryKeyItem("f8", TerminalSpecialKey.F8.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F8)),
-        AccessoryKeyItem("f9", TerminalSpecialKey.F9.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F9)),
-        AccessoryKeyItem("f10", TerminalSpecialKey.F10.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F10)),
-        AccessoryKeyItem("f11", TerminalSpecialKey.F11.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F11)),
-        AccessoryKeyItem("f12", TerminalSpecialKey.F12.label, AccessoryAction.SendSpecialKey(TerminalSpecialKey.F12)),
-        AccessoryKeyItem("paste", "Paste", AccessoryAction.Paste),
-    )
+    private val catalogItems: List<AccessoryKeyItem> =
+        listOf(
+            AccessoryKeyItem("tab", "Tab", AccessoryAction.SendSpecialKey(TerminalSpecialKey.Tab)),
+            AccessoryKeyItem(
+                "enter",
+                TerminalSpecialKey.Enter.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Enter),
+            ),
+            AccessoryKeyItem("space", "Space", AccessoryAction.SendText(" ")),
+            AccessoryKeyItem(
+                "escape",
+                "Esc",
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Escape),
+            ),
+            AccessoryKeyItem("ctrl", "Ctrl", AccessoryAction.ToggleModifier(TerminalModifier.Ctrl)),
+            AccessoryKeyItem("cmd", "Cmd", AccessoryAction.ToggleModifier(TerminalModifier.Cmd)),
+            AccessoryKeyItem("alt", "Alt", AccessoryAction.ToggleModifier(TerminalModifier.Alt)),
+            AccessoryKeyItem(
+                "shift",
+                "Shift",
+                AccessoryAction.ToggleModifier(TerminalModifier.Shift),
+            ),
+            AccessoryKeyItem(
+                "up",
+                TerminalSpecialKey.Up.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Up),
+            ),
+            AccessoryKeyItem(
+                "down",
+                TerminalSpecialKey.Down.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Down),
+            ),
+            AccessoryKeyItem(
+                "left",
+                TerminalSpecialKey.Left.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Left),
+            ),
+            AccessoryKeyItem(
+                "right",
+                TerminalSpecialKey.Right.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Right),
+            ),
+            AccessoryKeyItem(
+                "home",
+                TerminalSpecialKey.Home.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Home),
+            ),
+            AccessoryKeyItem(
+                "end",
+                TerminalSpecialKey.End.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.End),
+            ),
+            AccessoryKeyItem(
+                "page_up",
+                TerminalSpecialKey.PageUp.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.PageUp),
+            ),
+            AccessoryKeyItem(
+                "page_down",
+                TerminalSpecialKey.PageDown.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.PageDown),
+            ),
+            AccessoryKeyItem(
+                "insert",
+                TerminalSpecialKey.Insert.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Insert),
+            ),
+            AccessoryKeyItem(
+                "delete",
+                TerminalSpecialKey.Delete.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Delete),
+            ),
+            AccessoryKeyItem(
+                "backspace",
+                TerminalSpecialKey.Backspace.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Backspace),
+            ),
+            AccessoryKeyItem("minus", "-", AccessoryAction.SendText("-")),
+            AccessoryKeyItem("slash", "/", AccessoryAction.SendText("/")),
+            AccessoryKeyItem(
+                "f1",
+                TerminalSpecialKey.F1.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F1),
+            ),
+            AccessoryKeyItem(
+                "f2",
+                TerminalSpecialKey.F2.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F2),
+            ),
+            AccessoryKeyItem(
+                "f3",
+                TerminalSpecialKey.F3.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F3),
+            ),
+            AccessoryKeyItem(
+                "f4",
+                TerminalSpecialKey.F4.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F4),
+            ),
+            AccessoryKeyItem(
+                "f5",
+                TerminalSpecialKey.F5.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F5),
+            ),
+            AccessoryKeyItem(
+                "f6",
+                TerminalSpecialKey.F6.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F6),
+            ),
+            AccessoryKeyItem(
+                "f7",
+                TerminalSpecialKey.F7.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F7),
+            ),
+            AccessoryKeyItem(
+                "f8",
+                TerminalSpecialKey.F8.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F8),
+            ),
+            AccessoryKeyItem(
+                "f9",
+                TerminalSpecialKey.F9.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F9),
+            ),
+            AccessoryKeyItem(
+                "f10",
+                TerminalSpecialKey.F10.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F10),
+            ),
+            AccessoryKeyItem(
+                "f11",
+                TerminalSpecialKey.F11.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F11),
+            ),
+            AccessoryKeyItem(
+                "f12",
+                TerminalSpecialKey.F12.label,
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.F12),
+            ),
+            AccessoryKeyItem("paste", "Paste", AccessoryAction.Paste),
+        )
 
-    private val compositeGroups: List<AccessoryKeyGroup> = listOf(
-        AccessoryKeyGroup(
-            id = "digits",
-            label = "0-9",
-            children = (0..9).map { d ->
-                AccessoryKeyItem(
-                    id = "digit_$d",
-                    label = d.toString(),
-                    action = AccessoryAction.SendText(d.toString()),
-                )
-            },
-        ),
-    )
+    private val compositeGroups: List<AccessoryKeyGroup> =
+        listOf(
+            AccessoryKeyGroup(
+                id = "digits",
+                label = "0-9",
+                children =
+                    (0..9).map { d ->
+                        AccessoryKeyItem(
+                            id = "digit_$d",
+                            label = d.toString(),
+                            action = AccessoryAction.SendText(d.toString()),
+                        )
+                    },
+            )
+        )
 
     private val catalogById: Map<String, AccessoryKeyItem> = catalogItems.associateBy { it.id }
-    private val compositeGroupById: Map<String, AccessoryKeyGroup> = compositeGroups.associateBy { it.id }
+    private val compositeGroupById: Map<String, AccessoryKeyGroup> =
+        compositeGroups.associateBy { it.id }
 
-    private val defaultLayoutIds: List<String> = listOf(
-        "escape",
-        "tab",
-        "ctrl",
-        "cmd",
-        "shift",
-        "alt",
-        "up",
-        "down",
-        "left",
-        "right",
-        "enter",
-        "space",
-    )
+    private val defaultLayoutIds: List<String> =
+        listOf(
+            "escape",
+            "tab",
+            "ctrl",
+            "cmd",
+            "shift",
+            "alt",
+            "up",
+            "down",
+            "left",
+            "right",
+            "enter",
+            "space",
+        )
 
     fun defaultEntries(): List<ResolvedAccessoryEntry> = resolveSelectedLayout(defaultLayoutIds)
 

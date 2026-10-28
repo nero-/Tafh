@@ -12,7 +12,29 @@ on:
 name: Release
 
 jobs:
+  test:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4.4.4
+
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
   release:
+    needs: test
     permissions:
       contents: write
       id-token: write
@@ -21,8 +43,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
 
       - name: nix shell
         run: nix develop -L --verbose
@@ -83,7 +104,7 @@ jobs:
 
       - name: upload release
         if: ${{ github.ref_type == 'tag' || inputs.release_tag != '' }}
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
           target_commitish: ${{ github.sha }}

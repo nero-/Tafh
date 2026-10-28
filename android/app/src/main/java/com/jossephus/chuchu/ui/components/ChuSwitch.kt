@@ -8,7 +8,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -31,23 +30,21 @@ fun ChuSwitch(
     val thumbOffset by animateDpAsState(if (checked) 17.dp else 2.dp, label = "chu-switch")
 
     Box(
-        modifier = modifier
-            .size(width = 36.dp, height = 18.dp)
-            .background(trackColor)
-            .border(1.dp, colors.border)
-            .alpha(if (enabled) 1f else 0.5f)
-            .clickable(
-                enabled = enabled,
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = { onCheckedChange(!checked) },
-            ),
+        modifier =
+            modifier
+                .size(width = 36.dp, height = 18.dp)
+                .background(trackColor)
+                .border(1.dp, colors.border)
+                .alpha(if (enabled) 1f else 0.5f)
+                .clickable(
+                    enabled = enabled,
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = { onCheckedChange(!checked) },
+                )
     ) {
         Box(
-            modifier = Modifier
-                .offset(x = thumbOffset, y = 1.dp)
-                .size(16.dp)
-                .background(thumbColor),
+            modifier = Modifier.offset(x = thumbOffset, y = 1.dp).size(16.dp).background(thumbColor)
         )
     }
 }

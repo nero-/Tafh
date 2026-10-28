@@ -10,16 +10,11 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 @Composable
-fun ChuTheme(
-    themeName: String? = null,
-    fontName: String? = null,
-    content: @Composable () -> Unit,
-) {
+fun ChuTheme(themeName: String? = null, fontName: String? = null, content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val palette = themeName
-        ?.let { GhosttyThemeRegistry.getTheme(context, it) }
-        ?.toChuColorPalette()
-        ?: ChuDarkColors
+    val palette =
+        themeName?.let { GhosttyThemeRegistry.getTheme(context, it) }?.toChuColorPalette()
+            ?: ChuDarkColors
 
     val fontOption = remember(fontName) { ChuFontOption.fromId(fontName) }
     val typography = remember(fontOption) { chuTypographyFor(fontOption) }

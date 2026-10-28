@@ -12,8 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.jossephus.chuchu.data.repository.SettingsRepository
 import com.jossephus.chuchu.ui.ApplicationNavController
@@ -40,9 +40,7 @@ class MainActivity : FragmentActivity() {
             statusBarStyle = SystemBarStyle.dark(0x00000000),
             navigationBarStyle = SystemBarStyle.dark(0x00000000),
         )
-        setContent {
-            AppRoot()
-        }
+        setContent { AppRoot() }
     }
 }
 
@@ -55,18 +53,15 @@ fun AppRoot() {
     val themeName by settings.themeName.collectAsStateWithLifecycle()
     val themeMode by settings.themeMode.collectAsStateWithLifecycle()
     val lightThemeName by settings.lightThemeName.collectAsStateWithLifecycle()
-    val resolvedThemeName = resolveActiveThemeName(
-        themeMode = themeMode,
-        darkThemeName = themeName,
-        lightThemeName = lightThemeName,
-    )
+    val resolvedThemeName =
+        resolveActiveThemeName(
+            themeMode = themeMode,
+            darkThemeName = themeName,
+            lightThemeName = lightThemeName,
+        )
 
     ChuTheme(themeName = resolvedThemeName, fontName = fontName) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(ChuColors.current.background),
-        ) {
+        Box(modifier = Modifier.fillMaxSize().background(ChuColors.current.background)) {
             ApplicationNavController()
         }
     }

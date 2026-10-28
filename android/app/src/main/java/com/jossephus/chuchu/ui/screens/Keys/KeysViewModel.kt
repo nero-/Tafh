@@ -61,8 +61,7 @@ class KeysViewModel(application: Application) : AndroidViewModel(application) {
     fun generate(nameHint: String, passphrase: String = "") {
         viewModelScope.launch {
             when (val result = sshKeyRepository.generate(nameHint, passphrase)) {
-                is KeyGenerationResult.Success ->
-                    _events.emit(KeysEvent.Generated(result.key.name))
+                is KeyGenerationResult.Success -> _events.emit(KeysEvent.Generated(result.key.name))
                 KeyGenerationResult.Failed ->
                     _events.emit(KeysEvent.GenerateFailed("Key generation failed"))
             }

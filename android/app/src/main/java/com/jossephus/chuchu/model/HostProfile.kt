@@ -5,10 +5,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(
-    tableName = "host_profiles",
-    indices = [Index(value = ["name"])],
-)
+@Entity(tableName = "host_profiles", indices = [Index(value = ["name"])])
 data class HostProfile(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val name: String,
@@ -20,9 +17,7 @@ data class HostProfile(
     val keyPassphrase: String = "",
     val transport: Transport = Transport.SSH,
     val authMethod: AuthMethod = AuthMethod.Password,
-    @ColumnInfo(defaultValue = "0")
-    val requireAuthOnConnect: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val requireAuthOnConnect: Boolean = false,
     val postConnectCommand: String? = null,
-    @ColumnInfo(defaultValue = "NULL")
-    val multiplexer: MultiplexerType? = null,
+    @ColumnInfo(defaultValue = "NULL") val multiplexer: MultiplexerType? = null,
 )

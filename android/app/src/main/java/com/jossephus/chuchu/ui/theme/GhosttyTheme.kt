@@ -18,7 +18,8 @@ data class GhosttyTheme(
             val props = mutableMapOf<String, String>()
             val paletteColors = arrayOfNulls<Color>(16)
 
-            content.lineSequence()
+            content
+                .lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() && !it.startsWith("#") }
                 .forEach { line ->
@@ -38,7 +39,7 @@ data class GhosttyTheme(
                     } else {
                         props[key] = value
                     }
-            }
+                }
 
             val bg = parseHexColor(props["background"] ?: "#000000")
             val fg = parseHexColor(props["foreground"] ?: "#ffffff")
@@ -47,21 +48,30 @@ data class GhosttyTheme(
                 name = name,
                 background = bg,
                 foreground = fg,
-                cursorColor = parseHexColor(props["cursor-color"] ?: props["foreground"] ?: "#ffffff"),
-                cursorText = parseHexColor(props["cursor-text"] ?: props["background"] ?: "#000000"),
-                selectionBackground = parseHexColor(props["selection-background"] ?: props["foreground"] ?: "#ffffff"),
-                selectionForeground = parseHexColor(props["selection-foreground"] ?: props["background"] ?: "#000000"),
+                cursorColor =
+                    parseHexColor(props["cursor-color"] ?: props["foreground"] ?: "#ffffff"),
+                cursorText =
+                    parseHexColor(props["cursor-text"] ?: props["background"] ?: "#000000"),
+                selectionBackground =
+                    parseHexColor(
+                        props["selection-background"] ?: props["foreground"] ?: "#ffffff"
+                    ),
+                selectionForeground =
+                    parseHexColor(
+                        props["selection-foreground"] ?: props["background"] ?: "#000000"
+                    ),
                 palette = List(16) { paletteColors[it] ?: defaultTerminalPaletteColor(it) },
             )
         }
 
         private fun parseHexColor(hex: String): Color {
             val h = hex.trimStart('#')
-            val argb = when (h.length) {
-                6 -> h.toLongOrNull(16)?.let { 0xFF000000 or it }
-                8 -> h.toLongOrNull(16)
-                else -> null
-            }
+            val argb =
+                when (h.length) {
+                    6 -> h.toLongOrNull(16)?.let { 0xFF000000 or it }
+                    8 -> h.toLongOrNull(16)
+                    else -> null
+                }
             return Color((argb ?: 0xFF000000).toInt())
         }
     }
@@ -77,8 +87,7 @@ private fun Color.mix(other: Color, fraction: Float): Color {
     )
 }
 
-private fun Color.luminance(): Float =
-    0.299f * red + 0.587f * green + 0.114f * blue
+private fun Color.luminance(): Float = 0.299f * red + 0.587f * green + 0.114f * blue
 
 fun GhosttyTheme.toChuColorPalette(): ChuColorPalette {
     val isDark = background.luminance() < 0.5f
@@ -145,11 +154,12 @@ fun GhosttyTheme.toTerminalPaletteBytes(): ByteArray {
     }
 }
 
-fun Color.toRgbIntArray(): IntArray = intArrayOf(
-    (red * 255f).roundToInt().coerceIn(0, 255),
-    (green * 255f).roundToInt().coerceIn(0, 255),
-    (blue * 255f).roundToInt().coerceIn(0, 255),
-)
+fun Color.toRgbIntArray(): IntArray =
+    intArrayOf(
+        (red * 255f).roundToInt().coerceIn(0, 255),
+        (green * 255f).roundToInt().coerceIn(0, 255),
+        (blue * 255f).roundToInt().coerceIn(0, 255),
+    )
 
 private fun colorChannelToByte(value: Float): Byte =
     (value * 255f).roundToInt().coerceIn(0, 255).toByte()
@@ -177,23 +187,24 @@ private fun defaultTerminalPaletteColor(index: Int): Color {
     }
 }
 
-private val DEFAULT_ANSI_COLORS = listOf(
-    Color(0xFF000000),
-    Color(0xFF800000),
-    Color(0xFF008000),
-    Color(0xFF808000),
-    Color(0xFF000080),
-    Color(0xFF800080),
-    Color(0xFF008080),
-    Color(0xFFC0C0C0),
-    Color(0xFF808080),
-    Color(0xFFFF0000),
-    Color(0xFF00FF00),
-    Color(0xFFFFFF00),
-    Color(0xFF0000FF),
-    Color(0xFFFF00FF),
-    Color(0xFF00FFFF),
-    Color(0xFFFFFFFF),
-)
+private val DEFAULT_ANSI_COLORS =
+    listOf(
+        Color(0xFF000000),
+        Color(0xFF800000),
+        Color(0xFF008000),
+        Color(0xFF808000),
+        Color(0xFF000080),
+        Color(0xFF800080),
+        Color(0xFF008080),
+        Color(0xFFC0C0C0),
+        Color(0xFF808080),
+        Color(0xFFFF0000),
+        Color(0xFF00FF00),
+        Color(0xFFFFFF00),
+        Color(0xFF0000FF),
+        Color(0xFFFF00FF),
+        Color(0xFF00FFFF),
+        Color(0xFFFFFFFF),
+    )
 
 private val XTERM_CUBE_LEVELS = intArrayOf(0, 95, 135, 175, 215, 255)

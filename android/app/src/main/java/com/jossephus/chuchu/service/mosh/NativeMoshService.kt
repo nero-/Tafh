@@ -38,9 +38,7 @@ enum class MoshState(val code: Int) {
     Failed(5),
 }
 
-class NativeMoshService(
-    private val bridge: NativeMoshBridge = NativeMoshBridge(),
-) : Closeable {
+class NativeMoshService(private val bridge: NativeMoshBridge = NativeMoshBridge()) : Closeable {
     private companion object {
         const val INITIAL_OUTPUT_BUFFER_SIZE = 4096
         const val MAX_OUTPUT_BUFFER_SIZE = 1024 * 1024
@@ -51,7 +49,8 @@ class NativeMoshService(
     private val outputMeta = LongArray(5)
     private val stateBuf = LongArray(7)
 
-    val isLoaded: Boolean get() = bridge.isLoaded()
+    val isLoaded: Boolean
+        get() = bridge.isLoaded()
 
     fun create(configJson: String): Boolean {
         if (!bridge.isLoaded()) return false

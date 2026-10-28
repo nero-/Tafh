@@ -8,8 +8,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Focused tests for pure accessory-bar logic:
- * sticky modifier persistence, catalog entries, and dispatch behavior.
+ * Focused tests for pure accessory-bar logic: sticky modifier persistence, catalog entries, and
+ * dispatch behavior.
  *
  * These test only Kotlin/non-Android APIs so they run as plain JUnit.
  */
@@ -52,11 +52,14 @@ class AccessoryLogicTest {
     @Test
     fun `terminalMods encodes bits correctly`() {
         assertEquals(0, ModifierState().terminalMods())
-        assertEquals(1, ModifierState(shift = true).terminalMods())   // bit 0
-        assertEquals(2, ModifierState(ctrl = true).terminalMods())    // bit 1
-        assertEquals(4, ModifierState(alt = true).terminalMods())    // bit 2
-        assertEquals(8, ModifierState(cmd = true).terminalMods())    // bit 3
-        assertEquals(15, ModifierState(ctrl = true, alt = true, shift = true, cmd = true).terminalMods())
+        assertEquals(1, ModifierState(shift = true).terminalMods()) // bit 0
+        assertEquals(2, ModifierState(ctrl = true).terminalMods()) // bit 1
+        assertEquals(4, ModifierState(alt = true).terminalMods()) // bit 2
+        assertEquals(8, ModifierState(cmd = true).terminalMods()) // bit 3
+        assertEquals(
+            15,
+            ModifierState(ctrl = true, alt = true, shift = true, cmd = true).terminalMods(),
+        )
     }
 
     @Test
@@ -101,12 +104,13 @@ class AccessoryLogicTest {
     @Test
     fun `dispatch ToggleModifier toggles and preserves other modifiers`() {
         val s0 = ModifierState(ctrl = true)
-        val r = TerminalAccessoryDispatcher.dispatch(
-            AccessoryAction.ToggleModifier(TerminalModifier.Alt),
-            s0,
-        )
-        assertTrue(r.modifierState.ctrl)   // preserved
-        assertTrue(r.modifierState.alt)    // toggled on
+        val r =
+            TerminalAccessoryDispatcher.dispatch(
+                AccessoryAction.ToggleModifier(TerminalModifier.Alt),
+                s0,
+            )
+        assertTrue(r.modifierState.ctrl) // preserved
+        assertTrue(r.modifierState.alt) // toggled on
         assertNull(r.specialKey)
         assertNull(r.text)
         assertFalse(r.shouldPaste)
@@ -116,11 +120,12 @@ class AccessoryLogicTest {
     @Test
     fun `dispatch SendSpecialKey preserves modifiers and sets suppressImeInput`() {
         val s = ModifierState(shift = true)
-        val r = TerminalAccessoryDispatcher.dispatch(
-            AccessoryAction.SendSpecialKey(TerminalSpecialKey.Tab),
-            s,
-        )
-        assertTrue(r.modifierState.shift)   // sticky — preserved
+        val r =
+            TerminalAccessoryDispatcher.dispatch(
+                AccessoryAction.SendSpecialKey(TerminalSpecialKey.Tab),
+                s,
+            )
+        assertTrue(r.modifierState.shift) // sticky — preserved
         assertEquals(TerminalSpecialKey.Tab, r.specialKey)
         assertTrue(r.suppressImeInput)
         assertNull(r.text)
@@ -130,11 +135,8 @@ class AccessoryLogicTest {
     @Test
     fun `dispatch SendText applies modifier to text`() {
         val s = ModifierState(ctrl = true)
-        val r = TerminalAccessoryDispatcher.dispatch(
-            AccessoryAction.SendText("a"),
-            s,
-        )
-        assertTrue(r.modifierState.ctrl)   // sticky — preserved
+        val r = TerminalAccessoryDispatcher.dispatch(AccessoryAction.SendText("a"), s)
+        assertTrue(r.modifierState.ctrl) // sticky — preserved
         assertEquals(0x01.toChar().toString(), r.text)
         assertNull(r.specialKey)
         assertFalse(r.shouldPaste)
@@ -143,11 +145,8 @@ class AccessoryLogicTest {
     @Test
     fun `dispatch Paste returns shouldPaste and preserves modifiers`() {
         val s = ModifierState(alt = true)
-        val r = TerminalAccessoryDispatcher.dispatch(
-            AccessoryAction.Paste,
-            s,
-        )
-        assertTrue(r.modifierState.alt)   // sticky — preserved
+        val r = TerminalAccessoryDispatcher.dispatch(AccessoryAction.Paste, s)
+        assertTrue(r.modifierState.alt) // sticky — preserved
         assertTrue(r.shouldPaste)
         assertNull(r.specialKey)
         assertNull(r.text)
@@ -234,25 +233,24 @@ class AccessoryLogicTest {
 
     @Test
     fun `normalizeIds removes unknown ids and deduplicates`() {
-        val result = TerminalAccessoryLayoutStore.normalizeIds(
-            listOf("escape", "unknown", "tab", "escape", "nope"),
-        )
+        val result =
+            TerminalAccessoryLayoutStore.normalizeIds(
+                listOf("escape", "unknown", "tab", "escape", "nope")
+            )
         assertEquals(listOf("escape", "tab"), result)
     }
 
     @Test
     fun `normalizeIds keeps composite group ids`() {
-        val result = TerminalAccessoryLayoutStore.normalizeIds(
-            listOf("digits", "escape", "digits", "bogus"),
-        )
+        val result =
+            TerminalAccessoryLayoutStore.normalizeIds(listOf("digits", "escape", "digits", "bogus"))
         assertEquals(listOf("digits", "escape"), result)
     }
 
     @Test
     fun `resolveSelectedLayout returns entries for valid ids`() {
-        val entries = TerminalAccessoryLayoutStore.resolveSelectedLayout(
-            listOf("escape", "ctrl", "up"),
-        )
+        val entries =
+            TerminalAccessoryLayoutStore.resolveSelectedLayout(listOf("escape", "ctrl", "up"))
         assertEquals(3, entries.size)
         assertEquals("escape", entries[0].id)
         assertEquals("ctrl", entries[1].id)

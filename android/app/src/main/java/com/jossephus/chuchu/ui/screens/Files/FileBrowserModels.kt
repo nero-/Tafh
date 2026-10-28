@@ -33,7 +33,9 @@ data class UploadProgress(
     val fileIndex: Int,
     val totalFiles: Int,
 ) {
-    val percent: Int get() = if (totalBytes > 0) (bytesWritten * 100 / totalBytes).toInt().coerceAtMost(100) else 0
+    val percent: Int
+        get() =
+            if (totalBytes > 0) (bytesWritten * 100 / totalBytes).toInt().coerceAtMost(100) else 0
 }
 
 data class FileBrowserUiState(

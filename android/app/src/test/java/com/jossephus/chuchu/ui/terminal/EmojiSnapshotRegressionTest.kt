@@ -23,7 +23,9 @@ class EmojiSnapshotRegressionTest {
         val extrasCodepoints = 1
         val extrasBytes = 4 + (extrasRecordCount * 8) + (extrasCodepoints * 4)
 
-        val raw = ByteBuffer.allocate(headerBytes + gridBytes + extrasBytes).order(ByteOrder.LITTLE_ENDIAN)
+        val raw =
+            ByteBuffer.allocate(headerBytes + gridBytes + extrasBytes)
+                .order(ByteOrder.LITTLE_ENDIAN)
 
         // Header
         raw.putInt(cols)
@@ -116,58 +118,63 @@ class EmojiSnapshotRegressionTest {
 
     @Test
     fun selectionFallbackReconstructsZwjEmojiAcrossSpacerCells() {
-        val snapshot = snapshotOf(
-            cols = 4,
-            rows = 1,
-            cells = listOf(
-                Cell(0x1F9D1, TerminalSnapshot.CELL_FLAG_HAS_GRAPHEME),
-                Cell(0x1F4BB, 0),
-                Cell(32, TerminalSnapshot.CELL_FLAG_SPACER),
-                Cell(32, 0),
-            ),
-            extras = mapOf(0 to intArrayOf(0x200D)),
-        )
+        val snapshot =
+            snapshotOf(
+                cols = 4,
+                rows = 1,
+                cells =
+                    listOf(
+                        Cell(0x1F9D1, TerminalSnapshot.CELL_FLAG_HAS_GRAPHEME),
+                        Cell(0x1F4BB, 0),
+                        Cell(32, TerminalSnapshot.CELL_FLAG_SPACER),
+                        Cell(32, 0),
+                    ),
+                extras = mapOf(0 to intArrayOf(0x200D)),
+            )
 
         assertEquals("🧑‍💻", extractSelectionText(snapshot, 0..3))
     }
 
     @Test
     fun selectionFallbackReconstructsFlagsAcrossSpacerCells() {
-        val snapshot = snapshotOf(
-            cols = 5,
-            rows = 1,
-            cells = listOf(
-                Cell(0x1F1FA, 0),
-                Cell(32, TerminalSnapshot.CELL_FLAG_SPACER),
-                Cell(0x1F1F8, 0),
-                Cell(32, TerminalSnapshot.CELL_FLAG_SPACER),
-                Cell(32, 0),
-            ),
-        )
+        val snapshot =
+            snapshotOf(
+                cols = 5,
+                rows = 1,
+                cells =
+                    listOf(
+                        Cell(0x1F1FA, 0),
+                        Cell(32, TerminalSnapshot.CELL_FLAG_SPACER),
+                        Cell(0x1F1F8, 0),
+                        Cell(32, TerminalSnapshot.CELL_FLAG_SPACER),
+                        Cell(32, 0),
+                    ),
+            )
 
         assertEquals("🇺🇸", extractSelectionText(snapshot, 0..4))
     }
 
     @Test
     fun selectionFallbackReconstructsMode2027SingleCellCoupleZwjCluster() {
-        val snapshot = snapshotOf(
-            cols = 1,
-            rows = 1,
-            cells = listOf(
-                Cell(0x1F469, TerminalSnapshot.CELL_FLAG_HAS_GRAPHEME),
-            ),
-            extras = mapOf(
-                0 to intArrayOf(
-                    0x200D, // ZWJ
-                    0x2764, // HEART
-                    0xFE0F, // VS16
-                    0x200D, // ZWJ
-                    0x1F48B, // KISS MARK
-                    0x200D, // ZWJ
-                    0x1F468, // MAN
-                ),
-            ),
-        )
+        val snapshot =
+            snapshotOf(
+                cols = 1,
+                rows = 1,
+                cells = listOf(Cell(0x1F469, TerminalSnapshot.CELL_FLAG_HAS_GRAPHEME)),
+                extras =
+                    mapOf(
+                        0 to
+                            intArrayOf(
+                                0x200D, // ZWJ
+                                0x2764, // HEART
+                                0xFE0F, // VS16
+                                0x200D, // ZWJ
+                                0x1F48B, // KISS MARK
+                                0x200D, // ZWJ
+                                0x1F468, // MAN
+                            )
+                    ),
+            )
 
         assertEquals("👩‍❤️‍💋‍👨", extractSelectionText(snapshot, 0..0))
     }
@@ -189,7 +196,9 @@ class EmojiSnapshotRegressionTest {
         val extrasCodepoints = record0.size + record1.size
         val extrasBytes = 4 + (extrasRecordCount * 8) + (extrasCodepoints * 4)
 
-        val raw = ByteBuffer.allocate(headerBytes + gridBytes + extrasBytes).order(ByteOrder.LITTLE_ENDIAN)
+        val raw =
+            ByteBuffer.allocate(headerBytes + gridBytes + extrasBytes)
+                .order(ByteOrder.LITTLE_ENDIAN)
 
         // Header
         raw.putInt(cols)
@@ -247,10 +256,7 @@ class EmojiSnapshotRegressionTest {
         assertTrue(reconstructed.codePoints().noneMatch { cp -> cp in skinToneRange })
     }
 
-    private data class Cell(
-        val codepoint: Int,
-        val flags: Int,
-    )
+    private data class Cell(val codepoint: Int, val flags: Int)
 
     private fun snapshotOf(
         cols: Int,

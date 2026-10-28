@@ -14,15 +14,11 @@ import com.jossephus.chuchu.ui.theme.ChuTypography
 fun TuiBadge(text: String, color: Color) {
     val typography = ChuTypography.current
     Box(
-        modifier = Modifier
-            .background(color.copy(alpha = 0.12f))
-            .border(1.dp, color.copy(alpha = 0.6f))
-            .padding(horizontal = 6.dp, vertical = 1.dp),
+        modifier =
+            Modifier.background(color.copy(alpha = 0.12f))
+                .border(1.dp, color.copy(alpha = 0.6f))
+                .padding(horizontal = 6.dp, vertical = 1.dp)
     ) {
-        ChuText(
-            text,
-            style = typography.labelSmall,
-            color = color,
-        )
+        ChuText(text, style = typography.labelSmall, color = color)
     }
 }

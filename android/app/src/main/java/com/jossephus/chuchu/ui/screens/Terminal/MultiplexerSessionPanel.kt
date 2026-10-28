@@ -44,12 +44,20 @@ fun MultiplexerSessionPanel(
     Column(modifier = modifier.fillMaxWidth()) {
         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ChuText("multiplexer sessions", style = typography.body, color = colors.textSecondary)
+                ChuText(
+                    "multiplexer sessions",
+                    style = typography.body,
+                    color = colors.textSecondary,
+                )
                 Spacer(modifier = Modifier.weight(1f))
                 if (loading) {
                     ChuText("…", style = typography.labelSmall, color = colors.textMuted)
                 } else {
-                    ChuText("${visibleSessions.size}", style = typography.labelSmall, color = colors.textMuted)
+                    ChuText(
+                        "${visibleSessions.size}",
+                        style = typography.labelSmall,
+                        color = colors.textMuted,
+                    )
                 }
             }
         }
@@ -113,20 +121,18 @@ private fun MultiplexerSessionRow(
     val typography = ChuTypography.current
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(
-                1.dp,
-                colors.border.copy(alpha = if (session.attached) 0.65f else 0.35f),
-            )
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .border(1.dp, colors.border.copy(alpha = if (session.attached) 0.65f else 0.35f))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(if (session.attached) colors.success else Color.Transparent),
+            modifier =
+                Modifier.size(8.dp)
+                    .background(if (session.attached) colors.success else Color.Transparent)
         )
         ChuText(
             session.name,

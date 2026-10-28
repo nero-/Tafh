@@ -9,24 +9,28 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.AutoMigrationSpec
+import com.jossephus.chuchu.data.crypto.KeystoreSecretCodec
+import com.jossephus.chuchu.data.crypto.SecretCodec
 import com.jossephus.chuchu.model.HostProfile
 import com.jossephus.chuchu.model.SshKey
 
 @Database(
     entities = [HostProfile::class, SshKey::class],
     version = 11,
-    autoMigrations = [
-        AutoMigration(from = 5, to = 6),
-        AutoMigration(from = 6, to = 7, spec = AppDatabase.Migration6To7::class),
-        AutoMigration(from = 7, to = 8),
-        AutoMigration(from = 8, to = 9),
-        AutoMigration(from = 9, to = 10, spec = AppDatabase.Migration9To10::class),
-        AutoMigration(from = 10, to = 11),
-    ],
+    autoMigrations =
+        [
+            AutoMigration(from = 5, to = 6),
+            AutoMigration(from = 6, to = 7, spec = AppDatabase.Migration6To7::class),
+            AutoMigration(from = 7, to = 8),
+            AutoMigration(from = 8, to = 9),
+            AutoMigration(from = 9, to = 10, spec = AppDatabase.Migration9To10::class),
+            AutoMigration(from = 10, to = 11),
+        ],
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun hostProfileDao(): HostProfileDao
+
     abstract fun sshKeyDao(): SshKeyDao
 
     @DeleteColumn(tableName = "host_profiles", columnName = "keyPath")
@@ -40,19 +44,27 @@ abstract class AppDatabase : RoomDatabase() {
     class Migration9To10 : AutoMigrationSpec
 
     companion object {
-        @Volatile
-        private var instance: AppDatabase? = null
+        /**
+         * The one [SecretCodec] every repository writes through. Lazy so that merely referencing
+         * the database class (e.g. from a test or a preview) does not touch `AndroidKeyStore`; the
+         * keystore key itself is created on the first encrypt.
+         */
+        val secretCodec: SecretCodec by lazy { KeystoreSecretCodec() }
+
+        @Volatile private var instance: AppDatabase? = null
 
         fun getInstance(context: Context): AppDatabase {
-            return instance ?: synchronized(this) {
-                instance ?: Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "chuchu.db",
-                )
-                    .build()
-                    .also { instance = it }
-            }
+            return instance
+                ?: synchronized(this) {
+                    instance
+                        ?: Room.databaseBuilder(
+                                context.applicationContext,
+                                AppDatabase::class.java,
+                                "chuchu.db",
+                            )
+                            .build()
+                            .also { instance = it }
+                }
         }
     }
 }

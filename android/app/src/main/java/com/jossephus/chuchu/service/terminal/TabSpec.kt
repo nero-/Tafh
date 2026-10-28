@@ -57,24 +57,26 @@ data class TabSpec(
             publicKeyOpenSsh: String = "",
             privateKeyPem: String = "",
             keyPassphrase: String = "",
-        ): TabSpec = TabSpec(
-            hostId = host.id,
-            displayName = host.name,
-            host = host.host,
-            port = host.port,
-            username = host.username,
-            password = host.password,
-            authMethod = host.authMethod,
-            publicKeyOpenSsh = publicKeyOpenSsh,
-            privateKeyPem = privateKeyPem,
-            keyPassphrase = keyPassphrase,
-            transport = host.transport,
-            postConnectCommand = host.postConnectCommand,
-            multiplexer = host.multiplexer?.takeIf {
-                it.runtimeSupported &&
-                    host.transport != Transport.Mosh &&
-                    host.transport != Transport.LocalShell
-            },
-        )
+        ): TabSpec =
+            TabSpec(
+                hostId = host.id,
+                displayName = host.name,
+                host = host.host,
+                port = host.port,
+                username = host.username,
+                password = host.password,
+                authMethod = host.authMethod,
+                publicKeyOpenSsh = publicKeyOpenSsh,
+                privateKeyPem = privateKeyPem,
+                keyPassphrase = keyPassphrase,
+                transport = host.transport,
+                postConnectCommand = host.postConnectCommand,
+                multiplexer =
+                    host.multiplexer?.takeIf {
+                        it.runtimeSupported &&
+                            host.transport != Transport.Mosh &&
+                            host.transport != Transport.LocalShell
+                    },
+            )
     }
 }

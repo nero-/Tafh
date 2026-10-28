@@ -7,18 +7,12 @@ import org.junit.Test
 class ConnectionRecoveryPolicyTest {
     @Test
     fun moshFailureRequiresExplicitReconnect() {
-        assertEquals(
-            ReadLoopExitAction.RequireManualReconnect,
-            readLoopExitAction(Transport.Mosh),
-        )
+        assertEquals(ReadLoopExitAction.RequireManualReconnect, readLoopExitAction(Transport.Mosh))
     }
 
     @Test
     fun remoteShellTransportsKeepAutomaticReconnect() {
-        assertEquals(
-            ReadLoopExitAction.AutomaticReconnect,
-            readLoopExitAction(Transport.SSH),
-        )
+        assertEquals(ReadLoopExitAction.AutomaticReconnect, readLoopExitAction(Transport.SSH))
         assertEquals(
             ReadLoopExitAction.AutomaticReconnect,
             readLoopExitAction(Transport.TailscaleSSH),
@@ -27,9 +21,6 @@ class ConnectionRecoveryPolicyTest {
 
     @Test
     fun localShellDisconnectsWithoutRemoteReconnect() {
-        assertEquals(
-            ReadLoopExitAction.Disconnect,
-            readLoopExitAction(Transport.LocalShell),
-        )
+        assertEquals(ReadLoopExitAction.Disconnect, readLoopExitAction(Transport.LocalShell))
     }
 }

@@ -6,11 +6,12 @@ import org.junit.Test
 class TmuxMultiplexerTest {
     @Test
     fun launchCreatesOrSwitchesOutsideTmuxAndSwitchesClientInsideTmux() {
-        val command = TmuxMultiplexer.launchCommand(
-            sessionName = "chuchu-1",
-            createIfMissing = true,
-            trustedRemoteName = false,
-        )
+        val command =
+            TmuxMultiplexer.launchCommand(
+                sessionName = "chuchu-1",
+                createIfMissing = true,
+                trustedRemoteName = false,
+            )
 
         assertEquals(
             "if [ -n \"\$TMUX\" ]; then tmux switch-client -t '=chuchu-1'; else exec tmux new-session -A -s 'chuchu-1'; fi",
@@ -29,11 +30,12 @@ class TmuxMultiplexerTest {
 
     @Test
     fun launchQuotesTrustedRemoteNames() {
-        val command = TmuxMultiplexer.launchCommand(
-            sessionName = "work'space; rm -rf /",
-            createIfMissing = true,
-            trustedRemoteName = true,
-        )
+        val command =
+            TmuxMultiplexer.launchCommand(
+                sessionName = "work'space; rm -rf /",
+                createIfMissing = true,
+                trustedRemoteName = true,
+            )
 
         assertEquals(
             "if [ -n \"\$TMUX\" ]; then tmux switch-client -t '=work'\\''space; rm -rf /'; else exec tmux new-session -A -s 'work'\\''space; rm -rf /'; fi",
@@ -43,11 +45,12 @@ class TmuxMultiplexerTest {
 
     @Test
     fun launchExistingUsesSwitchClientAndExactAttachFallback() {
-        val command = TmuxMultiplexer.launchCommand(
-            sessionName = "chuchu-1",
-            createIfMissing = false,
-            trustedRemoteName = true,
-        )
+        val command =
+            TmuxMultiplexer.launchCommand(
+                sessionName = "chuchu-1",
+                createIfMissing = false,
+                trustedRemoteName = true,
+            )
 
         assertEquals(
             "if [ -n \"\$TMUX\" ]; then tmux switch-client -t '=chuchu-1'; " +
@@ -59,11 +62,12 @@ class TmuxMultiplexerTest {
 
     @Test
     fun launchExistingQuotesTrustedRemoteNamesWithMetacharacters() {
-        val command = TmuxMultiplexer.launchCommand(
-            sessionName = "main tab; printf 'x'",
-            createIfMissing = false,
-            trustedRemoteName = true,
-        )
+        val command =
+            TmuxMultiplexer.launchCommand(
+                sessionName = "main tab; printf 'x'",
+                createIfMissing = false,
+                trustedRemoteName = true,
+            )
 
         assertEquals(
             "if [ -n \"\$TMUX\" ]; then tmux switch-client -t '=main tab; printf '\\''x'\\'''; " +

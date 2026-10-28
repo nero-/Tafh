@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,7 +30,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,13 +41,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.style.TextOverflow
 import com.jossephus.chuchu.ui.components.ChuButton
 import com.jossephus.chuchu.ui.components.ChuButtonVariant
 import com.jossephus.chuchu.ui.components.ChuCard
@@ -85,11 +82,10 @@ internal fun TerminalCustomActionsEditorSheet(
     val typography = ChuTypography.current
     val density = LocalDensity.current
     val reorderStepPx = with(density) { 64.dp.toPx() }
-    var draftItems by remember(initialGroups) {
-        mutableStateOf(
-            groupsToDraftItems(TerminalCustomActionStore.normalize(initialGroups)),
-        )
-    }
+    var draftItems by
+        remember(initialGroups) {
+            mutableStateOf(groupsToDraftItems(TerminalCustomActionStore.normalize(initialGroups)))
+        }
     var showAddRow by remember { mutableStateOf(false) }
     var showModifierDropdown by remember { mutableStateOf(false) }
     var enabledModifiers by remember { mutableStateOf(setOf<CustomActionModifier>()) }
@@ -140,21 +136,23 @@ internal fun TerminalCustomActionsEditorSheet(
         if (baseKey.isEmpty() || normalizedValue.isEmpty()) return
         val shortcut = shortcutInput.trim().takeIf { it.isNotEmpty() }
         val nextId = (draftItems.maxOfOrNull { it.id } ?: 0L) + 1L
-        val item = CustomKeyValueDraft(
-            id = nextId,
-            key = baseKey,
-            value = normalizedValue,
-            shortcut = shortcut,
-        )
-        val nextItems = editingIndex?.let { index ->
-            draftItems.toMutableList().also { list ->
-                if (index in list.indices) {
-                    list[index] = item.copy(id = list[index].id)
-                } else {
-                    list += item
+        val item =
+            CustomKeyValueDraft(
+                id = nextId,
+                key = baseKey,
+                value = normalizedValue,
+                shortcut = shortcut,
+            )
+        val nextItems =
+            editingIndex?.let { index ->
+                draftItems.toMutableList().also { list ->
+                    if (index in list.indices) {
+                        list[index] = item.copy(id = list[index].id)
+                    } else {
+                        list += item
+                    }
                 }
-            }
-        } ?: (draftItems + item)
+            } ?: (draftItems + item)
         draftItems = nextItems
         persistDraft(nextItems)
         keyInput = ""
@@ -166,26 +164,23 @@ internal fun TerminalCustomActionsEditorSheet(
         editingIndex = null
     }
 
-    val valuePreview = remember(valueInput, enabledModifiers) {
-        val baseValue = valueInput.trim().trimEnd('\n', '\r')
-        readableActionPreview(baseValue, enabledModifiers)
-    }
+    val valuePreview =
+        remember(valueInput, enabledModifiers) {
+            val baseValue = valueInput.trim().trimEnd('\n', '\r')
+            readableActionPreview(baseValue, enabledModifiers)
+        }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
+        AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colors.background.copy(alpha = 0.72f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismiss,
-                    ),
+                modifier =
+                    Modifier.fillMaxSize()
+                        .background(colors.background.copy(alpha = 0.72f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss,
+                        )
             )
         }
 
@@ -196,17 +191,17 @@ internal fun TerminalCustomActionsEditorSheet(
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.88f)
-                    .background(colors.surfaceVariant)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    )
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(16.dp),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .fillMaxHeight(0.88f)
+                        .background(colors.surfaceVariant)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
@@ -227,10 +222,8 @@ internal fun TerminalCustomActionsEditorSheet(
                 }
 
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
+                    modifier =
+                        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     draftItems.forEachIndexed { index, item ->
@@ -257,7 +250,10 @@ internal fun TerminalCustomActionsEditorSheet(
                                     }
                                 },
                                 onDelete = {
-                                    val nextItems = draftItems.filterIndexed { rowIndex, _ -> rowIndex != index }
+                                    val nextItems =
+                                        draftItems.filterIndexed { rowIndex, _ ->
+                                            rowIndex != index
+                                        }
                                     draftItems = nextItems
                                     persistDraft(nextItems)
                                     if (editingIndex == index) {
@@ -277,24 +273,26 @@ internal fun TerminalCustomActionsEditorSheet(
                                     reorderDirty = false
                                 },
                                 onReorderDrag = reorder@{ deltaY ->
-                                    val draggingId = draggingItemId ?: return@reorder
-                                    dragRemainderPx += deltaY
-                                    dragOffsetPx += deltaY
-                                    while (dragRemainderPx >= reorderStepPx) {
-                                        val activeIndex = draftItems.indexOfFirst { it.id == draggingId }
-                                        if (activeIndex < 0) break
-                                        if (!moveDraftItem(activeIndex, 1)) break
-                                        dragRemainderPx -= reorderStepPx
-                                        dragOffsetPx -= reorderStepPx
-                                    }
-                                    while (dragRemainderPx <= -reorderStepPx) {
-                                        val activeIndex = draftItems.indexOfFirst { it.id == draggingId }
-                                        if (activeIndex < 0) break
-                                        if (!moveDraftItem(activeIndex, -1)) break
-                                        dragRemainderPx += reorderStepPx
-                                        dragOffsetPx += reorderStepPx
-                                    }
-                                },
+                                        val draggingId = draggingItemId ?: return@reorder
+                                        dragRemainderPx += deltaY
+                                        dragOffsetPx += deltaY
+                                        while (dragRemainderPx >= reorderStepPx) {
+                                            val activeIndex =
+                                                draftItems.indexOfFirst { it.id == draggingId }
+                                            if (activeIndex < 0) break
+                                            if (!moveDraftItem(activeIndex, 1)) break
+                                            dragRemainderPx -= reorderStepPx
+                                            dragOffsetPx -= reorderStepPx
+                                        }
+                                        while (dragRemainderPx <= -reorderStepPx) {
+                                            val activeIndex =
+                                                draftItems.indexOfFirst { it.id == draggingId }
+                                            if (activeIndex < 0) break
+                                            if (!moveDraftItem(activeIndex, -1)) break
+                                            dragRemainderPx += reorderStepPx
+                                            dragOffsetPx += reorderStepPx
+                                        }
+                                    },
                                 onReorderEnd = {
                                     if (reorderDirty) {
                                         persistDraft(draftItems)
@@ -326,121 +324,141 @@ internal fun TerminalCustomActionsEditorSheet(
                                 modifier = Modifier.padding(10.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                            ChuTextField(
-                                value = keyInput,
-                                onValueChange = { keyInput = it },
-                                label = "Key",
-                                placeholder = "a",
-                                singleLine = true,
-                                autoFocus = false,
-                            )
-                            ChuTextField(
-                                value = shortcutInput,
-                                onValueChange = { updated ->
-                                    shortcutInput = updated.takeLast(1)
-                                },
-                                label = "Shortcut",
-                                placeholder = "single key for chuchu command",
-                                singleLine = true,
-                                autoFocus = false,
-                            )
-                            ChuButton(
-                                onClick = { showModifierDropdown = !showModifierDropdown },
-                                variant = ChuButtonVariant.Outlined,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                val enabledLabel = if (enabledModifiers.isEmpty()) {
-                                    "No modifiers"
-                                } else {
-                                    CustomActionModifier.entries
-                                        .filter { it in enabledModifiers }
-                                        .joinToString(separator = "+") { it.label }
-                                }
-                                ChuText("Modifiers: $enabledLabel", style = typography.label)
-                            }
-
-                            AnimatedVisibility(visible = showModifierDropdown) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ChuTextField(
+                                    value = keyInput,
+                                    onValueChange = { keyInput = it },
+                                    label = "Key",
+                                    placeholder = "a",
+                                    singleLine = true,
+                                    autoFocus = false,
+                                )
+                                ChuTextField(
+                                    value = shortcutInput,
+                                    onValueChange = { updated ->
+                                        shortcutInput = updated.takeLast(1)
+                                    },
+                                    label = "Shortcut",
+                                    placeholder = "single key for chuchu command",
+                                    singleLine = true,
+                                    autoFocus = false,
+                                )
+                                ChuButton(
+                                    onClick = { showModifierDropdown = !showModifierDropdown },
+                                    variant = ChuButtonVariant.Outlined,
+                                    modifier = Modifier.fillMaxWidth(),
                                 ) {
-                                    CustomActionModifier.entries.forEach { modifier ->
-                                        val enabled = modifier in enabledModifiers
-                                        ChuButton(
-                                            onClick = {
-                                                enabledModifiers = if (enabled) {
-                                                    enabledModifiers - modifier
-                                                } else {
-                                                    enabledModifiers + modifier
-                                                }
-                                            },
-                                            variant = if (enabled) ChuButtonVariant.Filled else ChuButtonVariant.Outlined,
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                        ) {
-                                            ChuText(
-                                                modifier.label,
-                                                style = typography.labelSmall,
-                                                color = if (enabled) colors.onAccent else colors.textPrimary,
-                                            )
+                                    val enabledLabel =
+                                        if (enabledModifiers.isEmpty()) {
+                                            "No modifiers"
+                                        } else {
+                                            CustomActionModifier.entries
+                                                .filter { it in enabledModifiers }
+                                                .joinToString(separator = "+") { it.label }
+                                        }
+                                    ChuText("Modifiers: $enabledLabel", style = typography.label)
+                                }
+
+                                AnimatedVisibility(visible = showModifierDropdown) {
+                                    Row(
+                                        modifier =
+                                            Modifier.fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        CustomActionModifier.entries.forEach { modifier ->
+                                            val enabled = modifier in enabledModifiers
+                                            ChuButton(
+                                                onClick = {
+                                                    enabledModifiers =
+                                                        if (enabled) {
+                                                            enabledModifiers - modifier
+                                                        } else {
+                                                            enabledModifiers + modifier
+                                                        }
+                                                },
+                                                variant =
+                                                    if (enabled) ChuButtonVariant.Filled
+                                                    else ChuButtonVariant.Outlined,
+                                                contentPadding =
+                                                    PaddingValues(
+                                                        horizontal = 8.dp,
+                                                        vertical = 6.dp,
+                                                    ),
+                                            ) {
+                                                ChuText(
+                                                    modifier.label,
+                                                    style = typography.labelSmall,
+                                                    color =
+                                                        if (enabled) colors.onAccent
+                                                        else colors.textPrimary,
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            ChuTextField(
-                                value = valueInput,
-                                onValueChange = { updated ->
-                                    if (updated.contains('\n') || updated.contains('\r')) {
-                                        valueInput = updated
-                                        registerDraftItem()
-                                    } else {
-                                        valueInput = updated
-                                    }
-                                },
-                                label = "Value",
-                                placeholder = ":q",
-                                singleLine = false,
-                                autoFocus = false,
-                                modifier = Modifier.heightIn(min = 72.dp),
-                            )
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                ChuText(
-                                    text = if (valuePreview.isBlank()) "Preview: (empty)" else "Preview: $valuePreview",
-                                    style = typography.labelSmall,
-                                    color = colors.textMuted,
+                                ChuTextField(
+                                    value = valueInput,
+                                    onValueChange = { updated ->
+                                        if (updated.contains('\n') || updated.contains('\r')) {
+                                            valueInput = updated
+                                            registerDraftItem()
+                                        } else {
+                                            valueInput = updated
+                                        }
+                                    },
+                                    label = "Value",
+                                    placeholder = ":q",
+                                    singleLine = false,
+                                    autoFocus = false,
+                                    modifier = Modifier.heightIn(min = 72.dp),
                                 )
-                            }
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ChuButton(
-                                    onClick = ::registerDraftItem,
-                                    variant = ChuButtonVariant.Outlined,
-                                    bracketed = true,
-                                    modifier = Modifier.weight(1f),
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
                                 ) {
-                                    ChuText(if (editingIndex != null) "save" else "add", style = typography.label)
+                                    ChuText(
+                                        text =
+                                            if (valuePreview.isBlank()) "Preview: (empty)"
+                                            else "Preview: $valuePreview",
+                                        style = typography.labelSmall,
+                                        color = colors.textMuted,
+                                    )
                                 }
-                                ChuButton(
-                                    onClick = { cancelEdit() },
-                                    variant = ChuButtonVariant.Ghost,
-                                    bracketed = true,
-                                    borderColor = colors.textMuted,
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    ChuText("cancel", style = typography.label, color = colors.textMuted)
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    ChuButton(
+                                        onClick = ::registerDraftItem,
+                                        variant = ChuButtonVariant.Outlined,
+                                        bracketed = true,
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        ChuText(
+                                            if (editingIndex != null) "save" else "add",
+                                            style = typography.label,
+                                        )
+                                    }
+                                    ChuButton(
+                                        onClick = { cancelEdit() },
+                                        variant = ChuButtonVariant.Ghost,
+                                        bracketed = true,
+                                        borderColor = colors.textMuted,
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        ChuText(
+                                            "cancel",
+                                            style = typography.label,
+                                            color = colors.textMuted,
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-
             }
         }
     }
-}
-
 }
 
 @Composable
@@ -465,56 +483,54 @@ private fun CustomActionSwipeRow(
     val offsetX = remember(keyText, valueText) { Animatable(0f) }
     val cardShape = RectangleShape
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-    ) {
+    Box(modifier = Modifier.fillMaxWidth().height(56.dp)) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.error.copy(alpha = 0.78f))
-                .padding(end = 12.dp),
+            modifier =
+                Modifier.fillMaxSize()
+                    .background(colors.error.copy(alpha = 0.78f))
+                    .padding(end = 12.dp),
             contentAlignment = Alignment.CenterEnd,
         ) {
             ChuText("[ delete ]", style = typography.label, color = colors.background)
         }
 
         Row(
-            modifier = Modifier
-                .offset { IntOffset(offsetX.value.roundToInt(), dragOffsetPx.roundToInt()) }
-                .fillMaxSize()
-                .background(if (dragging) colors.accent.copy(alpha = 0.12f) else colors.surface)
-                .padding(horizontal = 12.dp)
-                .clickable(onClick = onEdit)
-                .pointerInput(keyText, valueText) {
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            val next = (offsetX.value + dragAmount).coerceIn(-maxSwipePx, 0f)
-                            scope.launch { offsetX.snapTo(next) }
-                        },
-                        onDragEnd = {
-                            if (offsetX.value <= -deleteThresholdPx) {
-                                onDelete()
-                            } else {
+            modifier =
+                Modifier.offset { IntOffset(offsetX.value.roundToInt(), dragOffsetPx.roundToInt()) }
+                    .fillMaxSize()
+                    .background(if (dragging) colors.accent.copy(alpha = 0.12f) else colors.surface)
+                    .padding(horizontal = 12.dp)
+                    .clickable(onClick = onEdit)
+                    .pointerInput(keyText, valueText) {
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                val next = (offsetX.value + dragAmount).coerceIn(-maxSwipePx, 0f)
+                                scope.launch { offsetX.snapTo(next) }
+                            },
+                            onDragEnd = {
+                                if (offsetX.value <= -deleteThresholdPx) {
+                                    onDelete()
+                                } else {
+                                    scope.launch {
+                                        offsetX.animateTo(0f, animationSpec = tween(140))
+                                    }
+                                }
+                            },
+                            onDragCancel = {
                                 scope.launch { offsetX.animateTo(0f, animationSpec = tween(140)) }
-                            }
-                        },
-                        onDragCancel = {
-                            scope.launch { offsetX.animateTo(0f, animationSpec = tween(140)) }
-                        },
-                    )
-                },
+                            },
+                        )
+                    },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier
-                    .padding(end = 8.dp)
-                    .height(40.dp)
-                    .width(28.dp)
-                    .pointerInput(keyText, valueText) {
+                modifier =
+                    Modifier.padding(end = 8.dp).height(40.dp).width(28.dp).pointerInput(
+                        keyText,
+                        valueText,
+                    ) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = { onReorderStart() },
                             onDragEnd = { onReorderEnd() },
@@ -553,7 +569,8 @@ private fun readableActionPreview(baseValue: String, modifiers: Set<CustomAction
         if (CustomActionModifier.Enter in modifiers) return "⏎"
         return ""
     }
-    val transformed = modifierStateForCustomAction(modifiers - CustomActionModifier.Cmd).applyToText(baseValue)
+    val transformed =
+        modifierStateForCustomAction(modifiers - CustomActionModifier.Cmd).applyToText(baseValue)
     val prefix = if (CustomActionModifier.Cmd in modifiers) "Cmd+" else ""
     val suffix = if (CustomActionModifier.Enter in modifiers) "⏎" else ""
     return prefix + readablePreview(transformed) + suffix
@@ -600,5 +617,7 @@ private fun draftItemsToGroups(items: List<CustomKeyValueDraft>): List<TerminalC
         val actions = grouped.getOrPut(key) { mutableListOf() }
         actions += TerminalCustomAction(label = key, payload = value, shortcut = item.shortcut)
     }
-    return grouped.map { (key, actions) -> TerminalCustomKeyGroup(keyLabel = key, actions = actions) }
+    return grouped.map { (key, actions) ->
+        TerminalCustomKeyGroup(keyLabel = key, actions = actions)
+    }
 }

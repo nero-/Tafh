@@ -200,6 +200,8 @@ fun ApplicationNavController() {
             val keepScreenAwake by settingsRepo.keepScreenAwake.collectAsStateWithLifecycle()
             val hideScreenContents by settingsRepo.hideScreenContents.collectAsStateWithLifecycle()
             val disableAutocorrect by settingsRepo.disableAutocorrect.collectAsStateWithLifecycle()
+            val remoteClipboardWriteEnabled by
+                settingsRepo.remoteClipboardWriteEnabled.collectAsStateWithLifecycle()
             val themeMode by settingsRepo.themeMode.collectAsStateWithLifecycle()
             val terminalFontSize by settingsRepo.terminalFontSize.collectAsStateWithLifecycle()
             val lightThemeName by settingsRepo.lightThemeName.collectAsStateWithLifecycle()
@@ -229,6 +231,8 @@ fun ApplicationNavController() {
                 onFontSelected = settingsRepo::setFont,
                 onAppLockEnabledChanged = settingsRepo::setAppLockEnabled,
                 onRequireAuthOnConnectChanged = settingsRepo::setRequireAuthOnConnect,
+                remoteClipboardWriteEnabled = remoteClipboardWriteEnabled,
+                onRemoteClipboardWriteEnabledChanged = settingsRepo::setRemoteClipboardWriteEnabled,
                 onLocalShellEnabledChanged = settingsRepo::setLocalShellEnabled,
                 onKeepScreenAwakeChanged = settingsRepo::setKeepScreenAwake,
                 onHideScreenContentsChanged = settingsRepo::setHideScreenContents,
@@ -301,28 +305,23 @@ fun ApplicationNavController() {
 }
 
 /**
- * Opaque full-screen cover shown while the app lock is enabled and the app is not
- * unlocked. It is the only content composed in that state, so no host list, tab,
- * or terminal is reachable without authentication.
+ * Opaque full-screen cover shown while the app lock is enabled and the app is not unlocked. It is
+ * the only content composed in that state, so no host list, tab, or terminal is reachable without
+ * authentication.
  */
 @Composable
-private fun AppLockScreen(
-    blocked: Boolean,
-    onUnlock: () -> Unit,
-) {
+private fun AppLockScreen(blocked: Boolean, onUnlock: () -> Unit) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.background),
+        modifier = Modifier.fillMaxSize().background(colors.background),
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(24.dp),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -331,19 +330,16 @@ private fun AppLockScreen(
                 ChuText("chuchu", style = typography.headline)
             }
             ChuText(
-                text = if (blocked) {
-                    "Authentication failed. Tap Unlock to try again."
-                } else {
-                    "App lock is enabled. Authenticate to continue."
-                },
+                text =
+                    if (blocked) {
+                        "Authentication failed. Tap Unlock to try again."
+                    } else {
+                        "App lock is enabled. Authenticate to continue."
+                    },
                 style = typography.body,
                 color = colors.textSecondary,
             )
-            ChuButton(
-                onClick = onUnlock,
-                variant = ChuButtonVariant.Outlined,
-                bracketed = true,
-            ) {
+            ChuButton(onClick = onUnlock, variant = ChuButtonVariant.Outlined, bracketed = true) {
                 ChuText("Unlock", style = typography.label, color = colors.textSecondary)
             }
         }

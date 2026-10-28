@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,7 +31,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.flow.map
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +50,7 @@ import com.jossephus.chuchu.ui.terminal.ResolvedAccessoryEntry
 import com.jossephus.chuchu.ui.terminal.TerminalCanvas
 import com.jossephus.chuchu.ui.theme.ChuColors
 import com.jossephus.chuchu.ui.theme.ChuTypography
+import kotlinx.coroutines.flow.map
 
 @Composable
 fun CommandPalette(
@@ -80,190 +79,216 @@ fun CommandPalette(
     onMultiplexerNew: () -> Unit = {},
     onMultiplexerAttach: (String) -> Unit = {},
 ) {
-  val colors = ChuColors.current
-  val typography = ChuTypography.current
-  val context = LocalContext.current
-  val view = LocalView.current
-  val keyboardController = LocalSoftwareKeyboardController.current
-  val entries = remember(tabs) { tabs.map { it to terminalTabDisplayLabel(it) } }
-  val maxIndex = (entries.size - 1).coerceAtLeast(0)
-  LaunchedEffect(entries.size) { onFocusedTabIndexChange(focusedTabIndex.coerceIn(0, maxIndex)) }
-  LaunchedEffect(activeTabId, entries) {
-    val activeIndex = entries.indexOfFirst { it.first.id == activeTabId }
-    if (activeIndex >= 0) onFocusedTabIndexChange(activeIndex)
-  }
-  val listState = rememberLazyListState()
-  LaunchedEffect(focusedTabIndex, entries.size) {
-    if (entries.isNotEmpty()) listState.animateScrollToItem(focusedTabIndex.coerceIn(0, maxIndex))
-  }
-  LaunchedEffect(Unit) {
-    keyboardController?.hide()
-    val imm = context.getSystemService(InputMethodManager::class.java)
-    imm?.hideSoftInputFromWindow(view.windowToken, 0)
-  }
-
-  AnimatedVisibility(visible = true, enter = fadeIn(), exit = fadeOut()) {
-    Box(
-        modifier =
-            Modifier.fillMaxSize().background(colors.background).clickable(onClick = onDismiss)
-    ) {
-      Column(
-          modifier =
-              Modifier.align(Alignment.TopCenter)
-                  .windowInsetsPadding(WindowInsets.safeDrawing)
-                  .padding(top = 56.dp, start = 16.dp, end = 16.dp)
-                  .fillMaxWidth()
-                  .background(colors.surface)
-                  .border(1.dp, colors.border.copy(alpha = 0.65f)),
-      ) {
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
-          ChuText(
-              "tabs",
-              style = typography.body,
-              color = colors.textSecondary,
-              modifier = Modifier.align(Alignment.Center),
-          )
-          ChuText(
-              "${entries.size}/${tabs.size}",
-              style = typography.labelSmall,
-              color = colors.textMuted,
-              modifier = Modifier.align(Alignment.CenterEnd),
-          )
-        }
-        if (entries.isNotEmpty()) {
-          LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp)) {
-            items(entries.size) { idx ->
-              val (tab, alias) = entries[idx]
-              val isActive = tab.id == activeTabId
-              val isFocused = idx == focusedTabIndex
-              val title by remember(tab) {
-                  tab.sessionState.map { it.title?.takeIf(String::isNotBlank) }
-              }.collectAsStateWithLifecycle(initialValue = null)
-              val displayLabel = title ?: alias
-              Row(
-                  modifier =
-                      Modifier.fillMaxWidth()
-                          .background(if (isFocused) colors.surface else Color.Transparent)
-                          .border(
-                              1.dp,
-                              if (isFocused) colors.accent.copy(alpha = 0.7f)
-                              else colors.border.copy(alpha = 0.35f),
-                          )
-                          .clickable { onSelectTab(tab.id) }
-                          .padding(horizontal = 12.dp, vertical = 8.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(10.dp),
-              ) {
-                Box(modifier = Modifier.width(10.dp)) {
-                  if (isFocused) ChuText("▌", style = typography.body, color = colors.accent)
-                }
-                Box(
-                    modifier =
-                        Modifier.size(8.dp)
-                            .background(if (isActive) colors.success else Color.Transparent)
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                  ChuText(
-                      displayLabel,
-                      style = typography.body,
-                      color = if (isFocused) colors.accent else colors.textPrimary,
-                  )
-                }
-                if (tabs.size > 1) {
-                  ChuButton(
-                      onClick = { onCloseTab(tab.id) },
-                      variant = ChuButtonVariant.Ghost,
-                      bracketed = true,
-                      borderColor = colors.textMuted,
-                      contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                  ) {
-                    ChuText("x", style = typography.labelSmall, color = colors.textMuted)
-                  }
-                }
-              }
-            }
-          }
-        }
-        val focusedTab = entries.getOrNull(focusedTabIndex)?.first
-        if (focusedTab != null) {
-          val focusedSnapshot by remember(focusedTab) {
-              focusedTab.sessionState.map { it.snapshot }
-          }.collectAsStateWithLifecycle(initialValue = null)
-          val snapshot = focusedSnapshot
-          if (snapshot != null) {
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.border))
-            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-              Box(
-                  modifier =
-                      Modifier.fillMaxWidth(0.68f)
-                          .height(104.dp)
-                          .background(colors.background.copy(alpha = 0.86f))
-                          .border(1.dp, colors.border.copy(alpha = 0.8f))
-                          .align(Alignment.Center)
-              ) {
-                TerminalCanvas(
-                    snapshot = snapshot,
-                    fontSizeSp = 10.5f,
-                    fitSnapshotToCanvas = true,
-                    enableGestures = false,
-                    cursorColor = Color.Transparent,
-                    selectionBackgroundColor = Color.Transparent,
-                    selectionForegroundColor = Color.Transparent,
-                    onTap = {},
-                    onPrimaryClick = { _, _ -> },
-                    onScroll = { _, _, _ -> },
-                    onFontSizeChange = {},
-                    onSelectionChanged = {},
-                    modifier = Modifier.fillMaxSize(),
-                )
-              }
-            }
-          }
-        }
-        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.border))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-          PaletteHint("↵", "open")
-          PaletteHint("esc", "dismiss")
-          Spacer(modifier = Modifier.weight(1f))
-          ChuButton(
-              onClick = onAddTab,
-              variant = ChuButtonVariant.Outlined,
-              bracketed = true,
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-          ) {
-            ChuText("+ new", style = typography.labelSmall, color = colors.accent)
-          }
-        }
-        if (multiplexerEnabled) {
-          MultiplexerSessionPanel(
-              sessions = multiplexerSessions,
-              loading = multiplexerSessionsLoading,
-              error = multiplexerSessionsError,
-              onRefresh = onMultiplexerRefresh,
-              onNew = onMultiplexerNew,
-              onAttach = onMultiplexerAttach,
-              onDismiss = onDismiss,
-          )
-        }
-      }
-      KeyboardAccessoryBar(
-          entries = accessoryEntries,
-          modifierState = accessoryModifierState,
-          onAction = onAccessoryAction,
-          onSettings = onOpenSettings,
-          onChuchuKey = onChuchuKey,
-          chuchuKeyActive = chuchuKeyActive,
-          onOpenFiles = onOpenFiles,
-          useSingleRow = useSingleRowAccessoryBar,
-          modifier =
-              Modifier.align(Alignment.BottomCenter)
-                  .windowInsetsPadding(WindowInsets.safeDrawing)
-                  .background(colors.background.copy(alpha = 0.92f)),
-      )
+    val colors = ChuColors.current
+    val typography = ChuTypography.current
+    val context = LocalContext.current
+    val view = LocalView.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val entries = remember(tabs) { tabs.map { it to terminalTabDisplayLabel(it) } }
+    val maxIndex = (entries.size - 1).coerceAtLeast(0)
+    LaunchedEffect(entries.size) { onFocusedTabIndexChange(focusedTabIndex.coerceIn(0, maxIndex)) }
+    LaunchedEffect(activeTabId, entries) {
+        val activeIndex = entries.indexOfFirst { it.first.id == activeTabId }
+        if (activeIndex >= 0) onFocusedTabIndexChange(activeIndex)
     }
-  }
+    val listState = rememberLazyListState()
+    LaunchedEffect(focusedTabIndex, entries.size) {
+        if (entries.isNotEmpty())
+            listState.animateScrollToItem(focusedTabIndex.coerceIn(0, maxIndex))
+    }
+    LaunchedEffect(Unit) {
+        keyboardController?.hide()
+        val imm = context.getSystemService(InputMethodManager::class.java)
+        imm?.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+
+    AnimatedVisibility(visible = true, enter = fadeIn(), exit = fadeOut()) {
+        Box(
+            modifier =
+                Modifier.fillMaxSize().background(colors.background).clickable(onClick = onDismiss)
+        ) {
+            Column(
+                modifier =
+                    Modifier.align(Alignment.TopCenter)
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(top = 56.dp, start = 16.dp, end = 16.dp)
+                        .fillMaxWidth()
+                        .background(colors.surface)
+                        .border(1.dp, colors.border.copy(alpha = 0.65f))
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    ChuText(
+                        "tabs",
+                        style = typography.body,
+                        color = colors.textSecondary,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                    ChuText(
+                        "${entries.size}/${tabs.size}",
+                        style = typography.labelSmall,
+                        color = colors.textMuted,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
+                }
+                if (entries.isNotEmpty()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                    ) {
+                        items(entries.size) { idx ->
+                            val (tab, alias) = entries[idx]
+                            val isActive = tab.id == activeTabId
+                            val isFocused = idx == focusedTabIndex
+                            val title by
+                                remember(tab) {
+                                        tab.sessionState.map {
+                                            it.title?.takeIf(String::isNotBlank)
+                                        }
+                                    }
+                                    .collectAsStateWithLifecycle(initialValue = null)
+                            val displayLabel = title ?: alias
+                            Row(
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                                        .background(
+                                            if (isFocused) colors.surface else Color.Transparent
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (isFocused) colors.accent.copy(alpha = 0.7f)
+                                            else colors.border.copy(alpha = 0.35f),
+                                        )
+                                        .clickable { onSelectTab(tab.id) }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Box(modifier = Modifier.width(10.dp)) {
+                                    if (isFocused)
+                                        ChuText("▌", style = typography.body, color = colors.accent)
+                                }
+                                Box(
+                                    modifier =
+                                        Modifier.size(8.dp)
+                                            .background(
+                                                if (isActive) colors.success else Color.Transparent
+                                            )
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    ChuText(
+                                        displayLabel,
+                                        style = typography.body,
+                                        color = if (isFocused) colors.accent else colors.textPrimary,
+                                    )
+                                }
+                                if (tabs.size > 1) {
+                                    ChuButton(
+                                        onClick = { onCloseTab(tab.id) },
+                                        variant = ChuButtonVariant.Ghost,
+                                        bracketed = true,
+                                        borderColor = colors.textMuted,
+                                        contentPadding =
+                                            PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    ) {
+                                        ChuText(
+                                            "x",
+                                            style = typography.labelSmall,
+                                            color = colors.textMuted,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                val focusedTab = entries.getOrNull(focusedTabIndex)?.first
+                if (focusedTab != null) {
+                    val focusedSnapshot by
+                        remember(focusedTab) { focusedTab.sessionState.map { it.snapshot } }
+                            .collectAsStateWithLifecycle(initialValue = null)
+                    val snapshot = focusedSnapshot
+                    if (snapshot != null) {
+                        Box(
+                            modifier =
+                                Modifier.fillMaxWidth().height(1.dp).background(colors.border)
+                        )
+                        Box(
+                            modifier =
+                                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier.fillMaxWidth(0.68f)
+                                        .height(104.dp)
+                                        .background(colors.background.copy(alpha = 0.86f))
+                                        .border(1.dp, colors.border.copy(alpha = 0.8f))
+                                        .align(Alignment.Center)
+                            ) {
+                                TerminalCanvas(
+                                    snapshot = snapshot,
+                                    fontSizeSp = 10.5f,
+                                    fitSnapshotToCanvas = true,
+                                    enableGestures = false,
+                                    cursorColor = Color.Transparent,
+                                    selectionBackgroundColor = Color.Transparent,
+                                    selectionForegroundColor = Color.Transparent,
+                                    onTap = {},
+                                    onPrimaryClick = { _, _ -> },
+                                    onScroll = { _, _, _ -> },
+                                    onFontSizeChange = {},
+                                    onSelectionChanged = {},
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                    }
+                }
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    PaletteHint("↵", "open")
+                    PaletteHint("esc", "dismiss")
+                    Spacer(modifier = Modifier.weight(1f))
+                    ChuButton(
+                        onClick = onAddTab,
+                        variant = ChuButtonVariant.Outlined,
+                        bracketed = true,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        ChuText("+ new", style = typography.labelSmall, color = colors.accent)
+                    }
+                }
+                if (multiplexerEnabled) {
+                    MultiplexerSessionPanel(
+                        sessions = multiplexerSessions,
+                        loading = multiplexerSessionsLoading,
+                        error = multiplexerSessionsError,
+                        onRefresh = onMultiplexerRefresh,
+                        onNew = onMultiplexerNew,
+                        onAttach = onMultiplexerAttach,
+                        onDismiss = onDismiss,
+                    )
+                }
+            }
+            KeyboardAccessoryBar(
+                entries = accessoryEntries,
+                modifierState = accessoryModifierState,
+                onAction = onAccessoryAction,
+                onSettings = onOpenSettings,
+                onChuchuKey = onChuchuKey,
+                chuchuKeyActive = chuchuKeyActive,
+                onOpenFiles = onOpenFiles,
+                useSingleRow = useSingleRowAccessoryBar,
+                modifier =
+                    Modifier.align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .background(colors.background.copy(alpha = 0.92f)),
+            )
+        }
+    }
 }

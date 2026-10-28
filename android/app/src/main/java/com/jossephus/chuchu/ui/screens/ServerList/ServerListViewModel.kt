@@ -15,29 +15,25 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class ServerListViewModel(
-    application: Application,
-) : AndroidViewModel(application) {
+class ServerListViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getInstance(application)
     private val hostRepository = HostRepository(db.hostProfileDao())
 
     private val searchQuery = MutableStateFlow("")
 
-    val hosts: StateFlow<List<HostProfile>> = hostRepository.observeAll()
-        .combine(searchQuery) { hosts, query ->
-            val trimmed = query.trim()
-            if (trimmed.isEmpty()) return@combine hosts
-            hosts.filter { host ->
-                host.name.contains(trimmed, ignoreCase = true) ||
-                    host.host.contains(trimmed, ignoreCase = true) ||
-                    host.username.contains(trimmed, ignoreCase = true)
+    val hosts: StateFlow<List<HostProfile>> =
+        hostRepository
+            .observeAll()
+            .combine(searchQuery) { hosts, query ->
+                val trimmed = query.trim()
+                if (trimmed.isEmpty()) return@combine hosts
+                hosts.filter { host ->
+                    host.name.contains(trimmed, ignoreCase = true) ||
+                        host.host.contains(trimmed, ignoreCase = true) ||
+                        host.username.contains(trimmed, ignoreCase = true)
+                }
             }
-        }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5_000),
-            emptyList(),
-        )
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun updateSearchQuery(value: String) {
         searchQuery.value = value
@@ -50,11 +46,8 @@ class ServerListViewModel(
         }
     }
 
-    val search: StateFlow<String> = searchQuery.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        "",
-    )
+    val search: StateFlow<String> =
+        searchQuery.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
     companion object {
         fun factory(application: Application): ViewModelProvider.Factory =

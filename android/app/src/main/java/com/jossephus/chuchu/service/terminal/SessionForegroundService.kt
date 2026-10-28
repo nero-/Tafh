@@ -11,7 +11,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -38,9 +37,7 @@ class SessionForegroundService : Service() {
 
             ACTION_DISCONNECT -> {
                 val app = applicationContext as Application
-                runCatching {
-                    TerminalSessionRepository.getInstance(app).disconnect()
-                }
+                runCatching { TerminalSessionRepository.getInstance(app).disconnect() }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -75,59 +72,51 @@ class SessionForegroundService : Service() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
         val existing = manager.getNotificationChannel(CHANNEL_ID)
         if (existing != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "SSH sessions",
-            NotificationManager.IMPORTANCE_LOW,
-        )
+        val channel =
+            NotificationChannel(CHANNEL_ID, "SSH sessions", NotificationManager.IMPORTANCE_LOW)
         channel.description = "Keeps active terminal sessions alive"
         manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(label: String): Notification {
-        val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
+        val pendingFlags =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
 
-        val tapIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
+        val tapIntent =
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
         val tapPending = PendingIntent.getActivity(this, 0, tapIntent, pendingFlags)
 
-        val disconnectIntent = Intent(this, SessionForegroundService::class.java)
-            .setAction(ACTION_DISCONNECT)
-        val disconnectPending = PendingIntent.getService(
-            this,
-            1,
-            disconnectIntent,
-            pendingFlags,
-        )
+        val disconnectIntent =
+            Intent(this, SessionForegroundService::class.java).setAction(ACTION_DISCONNECT)
+        val disconnectPending = PendingIntent.getService(this, 1, disconnectIntent, pendingFlags)
 
-        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Chuchu connected")
-            .setContentText(label)
-            .setOngoing(true)
-            .setAutoCancel(false)
-            .setOnlyAlertOnce(true)
-            .setShowWhen(false)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setContentIntent(tapPending)
-            .addAction(0, "Disconnect", disconnectPending)
+        val notificationBuilder =
+            NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("Chuchu connected")
+                .setContentText(label)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setContentIntent(tapPending)
+                .addAction(0, "Disconnect", disconnectPending)
 
         resolveNotificationColor()?.let { argb ->
-            notificationBuilder
-                .setColor(argb)
-                .setColorized(true)
+            notificationBuilder.setColor(argb).setColorized(true)
         }
 
         val notification = notificationBuilder.build()
-        notification.flags = notification.flags or
-            Notification.FLAG_ONGOING_EVENT or
-            Notification.FLAG_NO_CLEAR
+        notification.flags =
+            notification.flags or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR
         return notification
     }
 
@@ -147,9 +136,10 @@ class SessionForegroundService : Service() {
         private const val EXTRA_LABEL = "extra_label"
 
         fun start(context: Context, label: String) {
-            val intent = Intent(context, SessionForegroundService::class.java)
-                .setAction(ACTION_START)
-                .putExtra(EXTRA_LABEL, label)
+            val intent =
+                Intent(context, SessionForegroundService::class.java)
+                    .setAction(ACTION_START)
+                    .putExtra(EXTRA_LABEL, label)
             runCatching {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(intent)
@@ -160,7 +150,8 @@ class SessionForegroundService : Service() {
         }
 
         fun stop(context: Context) {
-            val stopIntent = Intent(context, SessionForegroundService::class.java).setAction(ACTION_STOP)
+            val stopIntent =
+                Intent(context, SessionForegroundService::class.java).setAction(ACTION_STOP)
             runCatching { context.startService(stopIntent) }
             context.stopService(Intent(context, SessionForegroundService::class.java))
         }

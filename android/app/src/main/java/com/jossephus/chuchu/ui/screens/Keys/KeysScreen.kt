@@ -197,7 +197,9 @@ private fun KeyCard(item: KeyListItem, onRename: () -> Unit, onDelete: () -> Uni
                 }
                 ChuButton(
                     onClick = {
-                        clipboard.setPrimaryClip(ClipData.newPlainText("SSH Public Key", key.publicKeyOpenSsh))
+                        clipboard.setPrimaryClip(
+                            ClipData.newPlainText("SSH Public Key", key.publicKeyOpenSsh)
+                        )
                         Toast.makeText(context, "public key copied", Toast.LENGTH_SHORT).show()
                     },
                     variant = ChuButtonVariant.Ghost,

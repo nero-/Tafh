@@ -119,7 +119,7 @@ class TerminalCustomActionStoreTest {
                         TerminalCustomAction(label = "q", payload = ":q"),
                     ),
                     group("g", TerminalCustomAction(label = "two", payload = "2")),
-                ),
+                )
             )
         assertEquals(expected, parsed)
         // Re-saving the migrated data writes JSON and still round-trips.
@@ -130,7 +130,8 @@ class TerminalCustomActionStoreTest {
 
     @Test
     fun `shortcut is normalized to lowercase`() {
-        val groups = listOf(group("g", TerminalCustomAction(label = "a", payload = "x", shortcut = "Q")))
+        val groups =
+            listOf(group("g", TerminalCustomAction(label = "a", payload = "x", shortcut = "Q")))
         val normalized = TerminalCustomActionStore.normalize(groups)
         assertEquals("q", normalized.first().actions.first().shortcut)
     }
@@ -139,14 +140,16 @@ class TerminalCustomActionStoreTest {
     fun `multi-char shortcut is clamped to a single lowercase char`() {
         // ChuchuKeyBindings only binds single-char shortcuts, so anything longer would
         // persist and display in the editor but never fire.
-        val groups = listOf(group("g", TerminalCustomAction(label = "a", payload = "x", shortcut = "AB")))
+        val groups =
+            listOf(group("g", TerminalCustomAction(label = "a", payload = "x", shortcut = "AB")))
         val normalized = TerminalCustomActionStore.normalize(groups)
         assertEquals("b", normalized.first().actions.first().shortcut)
     }
 
     @Test
     fun `whitespace-only shortcut is dropped`() {
-        val groups = listOf(group("g", TerminalCustomAction(label = "a", payload = "x", shortcut = "  ")))
+        val groups =
+            listOf(group("g", TerminalCustomAction(label = "a", payload = "x", shortcut = "  ")))
         val normalized = TerminalCustomActionStore.normalize(groups)
         assertNull(normalized.first().actions.first().shortcut)
     }

@@ -17,7 +17,7 @@ class MoshReconnectPolicyTest {
         assertTrue(
             MoshReconnectPolicy.CLIENT_MAX_RETRANSMIT_COUNT *
                 MoshReconnectPolicy.CLIENT_MIN_RETRANSMIT_INTERVAL_MS >
-                MoshReconnectPolicy.CLIENT_NETWORK_TIMEOUT_MS,
+                MoshReconnectPolicy.CLIENT_NETWORK_TIMEOUT_MS
         )
         assertTrue(MoshReconnectPolicy.CLIENT_MAX_RETRANSMIT_COUNT <= 0xFFFF_FFFFL)
     }
@@ -28,8 +28,8 @@ class MoshReconnectPolicyTest {
 
         assertTrue(
             command.contains(
-                "MOSH_SERVER_NETWORK_TMOUT=${MoshReconnectPolicy.SERVER_NETWORK_TIMEOUT_SECONDS}",
-            ),
+                "MOSH_SERVER_NETWORK_TMOUT=${MoshReconnectPolicy.SERVER_NETWORK_TIMEOUT_SECONDS}"
+            )
         )
         assertTrue(command.endsWith("mosh-server new -s -c 256"))
     }

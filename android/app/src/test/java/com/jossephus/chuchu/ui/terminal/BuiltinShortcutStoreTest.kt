@@ -6,9 +6,9 @@ import org.junit.Test
 /**
  * Round-trip and contract tests for [BuiltinShortcutStore].
  *
- * JSON storage means any key char survives — including the `:`, `,`, `;` that the
- * old inline delimited format could not (review finding F3). Pure Kotlin +
- * kotlinx.serialization, so this runs as a plain JUnit test.
+ * JSON storage means any key char survives — including the `:`, `,`, `;` that the old inline
+ * delimited format could not (review finding F3). Pure Kotlin + kotlinx.serialization, so this runs
+ * as a plain JUnit test.
  */
 class BuiltinShortcutStoreTest {
 
@@ -17,13 +17,14 @@ class BuiltinShortcutStoreTest {
 
     @Test
     fun `keys with delimiter chars survive round-trip`() {
-        val m = mapOf(
-            "tabs" to ":",
-            "new_tab" to ",",
-            "actions" to ";",
-            "settings" to "\"",
-            "close" to "q",
-        )
+        val m =
+            mapOf(
+                "tabs" to ":",
+                "new_tab" to ",",
+                "actions" to ";",
+                "settings" to "\"",
+                "close" to "q",
+            )
         assertEquals(BuiltinShortcutStore.normalize(m), roundTrip(m))
     }
 

@@ -6,22 +6,24 @@ import org.junit.Test
 class ZmxMultiplexerTest {
     @Test
     fun launchCreateUsesAttachUpsert() {
-        val command = ZmxMultiplexer.launchCommand(
-            sessionName = "chuchu-1",
-            createIfMissing = true,
-            trustedRemoteName = false,
-        )
+        val command =
+            ZmxMultiplexer.launchCommand(
+                sessionName = "chuchu-1",
+                createIfMissing = true,
+                trustedRemoteName = false,
+            )
 
         assertEquals("exec zmx attach 'chuchu-1'", command)
     }
 
     @Test
     fun launchExistingChecksListBeforeAttach() {
-        val command = ZmxMultiplexer.launchCommand(
-            sessionName = "main",
-            createIfMissing = false,
-            trustedRemoteName = true,
-        )
+        val command =
+            ZmxMultiplexer.launchCommand(
+                sessionName = "main",
+                createIfMissing = false,
+                trustedRemoteName = true,
+            )
 
         assertEquals(
             "if zmx list --short 2>/dev/null | grep -Fqx -- 'main'; then exec zmx attach 'main'; " +
@@ -32,11 +34,12 @@ class ZmxMultiplexerTest {
 
     @Test
     fun launchQuotesTrustedRemoteNames() {
-        val command = ZmxMultiplexer.launchCommand(
-            sessionName = "work'space; rm -rf /",
-            createIfMissing = true,
-            trustedRemoteName = true,
-        )
+        val command =
+            ZmxMultiplexer.launchCommand(
+                sessionName = "work'space; rm -rf /",
+                createIfMissing = true,
+                trustedRemoteName = true,
+            )
 
         assertEquals("exec zmx attach 'work'\\''space; rm -rf /'", command)
     }
@@ -53,10 +56,11 @@ class ZmxMultiplexerTest {
 
     @Test
     fun parsesSessionList() {
-        val sessions = ZmxMultiplexer.parseSessions(
-            "name=main\tpid=123\tclients=1\tcreated=0\tstart_dir=/tmp\n" +
-                "name=work\tpid=456\tclients=0\tcreated=1\n",
-        )
+        val sessions =
+            ZmxMultiplexer.parseSessions(
+                "name=main\tpid=123\tclients=1\tcreated=0\tstart_dir=/tmp\n" +
+                    "name=work\tpid=456\tclients=0\tcreated=1\n"
+            )
 
         assertEquals(
             listOf(
@@ -69,10 +73,11 @@ class ZmxMultiplexerTest {
 
     @Test
     fun parsesSessionListWithLeadingAndTrailingWhitespace() {
-        val sessions = ZmxMultiplexer.parseSessions(
-            "  name=main\tpid=123\tclients=1\tcreated=0\tstart_dir=/tmp\n " +
-                    "  name=work\tpid=456\tclients=0\tcreated=1\n ",
-        )
+        val sessions =
+            ZmxMultiplexer.parseSessions(
+                "  name=main\tpid=123\tclients=1\tcreated=0\tstart_dir=/tmp\n " +
+                    "  name=work\tpid=456\tclients=0\tcreated=1\n "
+            )
 
         assertEquals(
             listOf(

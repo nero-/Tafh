@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -36,14 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import com.jossephus.chuchu.data.backup.BackupImportPlan
 import com.jossephus.chuchu.data.backup.CHUCHU_BACKUP_MIME_TYPE
 import com.jossephus.chuchu.data.backup.KeyImportAction
@@ -57,6 +53,9 @@ import com.jossephus.chuchu.ui.security.VerificationResult
 import com.jossephus.chuchu.ui.security.requireUserVerification
 import com.jossephus.chuchu.ui.theme.ChuColors
 import com.jossephus.chuchu.ui.theme.ChuTypography
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** Internal step tracking for the backup sheet flow. */
 private sealed interface SheetStep {
@@ -71,7 +70,6 @@ private sealed interface SheetStep {
 
     /** Show import preview summary before confirming. */
     data class ImportPreview(val plan: BackupImportPlan) : SheetStep
-
 }
 
 @Composable
@@ -96,42 +94,44 @@ internal fun SshBackupSheet(
     val importPassphrase by viewModel.importPassphrase.collectAsStateWithLifecycle()
 
     // Sheet step – derived from VM state so they stay in sync
-    val step = when {
-        importPlan != null -> SheetStep.ImportPreview(importPlan!!)
-        else -> {
-            // Local-only steps managed inside the sheet
-            null
+    val step =
+        when {
+            importPlan != null -> SheetStep.ImportPreview(importPlan!!)
+            else -> {
+                // Local-only steps managed inside the sheet
+                null
+            }
         }
-    }
     var localStep by remember { mutableStateOf<SheetStep>(SheetStep.Overview) }
     var selectedKeyDetails by remember { mutableStateOf<SshKey?>(null) }
     val effectiveStep: SheetStep = step ?: localStep
 
     // SAF launchers – stay at composable scope
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument(CHUCHU_BACKUP_MIME_TYPE),
-    ) { uri ->
-        if (uri != null) {
-            viewModel.performExport(uri)
-        } else {
-            // User cancelled SAF picker – clear export passphrase
-            viewModel.updateExportPassphrase("")
-            viewModel.updateExportPassphraseConfirm("")
+    val exportLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument(CHUCHU_BACKUP_MIME_TYPE)
+        ) { uri ->
+            if (uri != null) {
+                viewModel.performExport(uri)
+            } else {
+                // User cancelled SAF picker – clear export passphrase
+                viewModel.updateExportPassphrase("")
+                viewModel.updateExportPassphraseConfirm("")
+            }
+            localStep = SheetStep.Overview
         }
-        localStep = SheetStep.Overview
-    }
 
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri != null) {
-            viewModel.performImport(uri)
-        } else {
-            // User cancelled SAF picker – clear import passphrase
-            viewModel.updateImportPassphrase("")
+    val importLauncher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.OpenDocument()) { uri
+            ->
+            if (uri != null) {
+                viewModel.performImport(uri)
+            } else {
+                // User cancelled SAF picker – clear import passphrase
+                viewModel.updateImportPassphrase("")
+            }
+            localStep = SheetStep.Overview
         }
-        localStep = SheetStep.Overview
-    }
 
     // ── Dismiss handler ────────────────────────────────────────────────────
     fun handleDismiss() {
@@ -170,20 +170,16 @@ internal fun SshBackupSheet(
     // ── Scrim + Sheet ──────────────────────────────────────────────────────
     Box(modifier = Modifier.fillMaxSize()) {
         // Scrim overlay
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
+        AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colors.background.copy(alpha = 0.72f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { handleDismiss() },
-                    ),
+                modifier =
+                    Modifier.fillMaxSize()
+                        .background(colors.background.copy(alpha = 0.72f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { handleDismiss() },
+                        )
             )
         }
 
@@ -195,17 +191,17 @@ internal fun SshBackupSheet(
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.82f)
-                    .background(colors.surfaceVariant)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    )
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(16.dp),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .fillMaxHeight(0.82f)
+                        .background(colors.surfaceVariant)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 // ── Header ────────────────────────────────────────────────
@@ -217,12 +213,16 @@ internal fun SshBackupSheet(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         ChuText("ssh hosts & keys backup", style = typography.headline)
                         ChuText(
-                            text = when (effectiveStep) {
-                                is SheetStep.Overview -> "Backup your SSH keys and server profiles."
-                                is SheetStep.ExportPassphrase -> "Create an encrypted backup file."
-                                is SheetStep.ImportPassphrase -> "Restore from an encrypted backup file."
-                                is SheetStep.ImportPreview -> "Review what will be imported."
-                            },
+                            text =
+                                when (effectiveStep) {
+                                    is SheetStep.Overview ->
+                                        "Backup your SSH keys and server profiles."
+                                    is SheetStep.ExportPassphrase ->
+                                        "Create an encrypted backup file."
+                                    is SheetStep.ImportPassphrase ->
+                                        "Restore from an encrypted backup file."
+                                    is SheetStep.ImportPreview -> "Review what will be imported."
+                                },
                             style = typography.body,
                             color = colors.textSecondary,
                         )
@@ -241,84 +241,88 @@ internal fun SshBackupSheet(
 
                 // ── Scrollable content ─────────────────────────────────────
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
+                    modifier =
+                        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     when (effectiveStep) {
-                        is SheetStep.Overview -> OverviewContent(
-                            keys = keys,
-                            busy = isBusy,
-                            onExport = { localStep = SheetStep.ExportPassphrase },
-                            onImport = { localStep = SheetStep.ImportPassphrase },
-                            onOpenKey = { key -> selectedKeyDetails = key },
-                        )
+                        is SheetStep.Overview ->
+                            OverviewContent(
+                                keys = keys,
+                                busy = isBusy,
+                                onExport = { localStep = SheetStep.ExportPassphrase },
+                                onImport = { localStep = SheetStep.ImportPassphrase },
+                                onOpenKey = { key -> selectedKeyDetails = key },
+                            )
 
-                        is SheetStep.ExportPassphrase -> ExportPassphraseContent(
-                            passphrase = exportPassphrase,
-                            passphraseConfirm = exportPassphraseConfirm,
-                            onPassphraseChange = viewModel::updateExportPassphrase,
-                            onPassphraseConfirmChange = viewModel::updateExportPassphraseConfirm,
-                            valid = viewModel.exportPassphraseValid(),
-                            busy = isBusy,
-                            onExport = {
-                                requireUserVerification(
-                                    context = context,
-                                    title = "Export SSH backup",
-                                    subtitle = "Authenticate to create an encrypted backup",
-                                ) { result ->
-                                    // Export materialises every private key and password, so
-                                    // it requires a real authentication. `Unavailable` means no
-                                    // device credential is enrolled: fail closed instead of
-                                    // exporting unauthenticated.
-                                    if (result == VerificationResult.Success) {
-                                        exportLauncher.launch(defaultBackupFileName())
+                        is SheetStep.ExportPassphrase ->
+                            ExportPassphraseContent(
+                                passphrase = exportPassphrase,
+                                passphraseConfirm = exportPassphraseConfirm,
+                                onPassphraseChange = viewModel::updateExportPassphrase,
+                                onPassphraseConfirmChange =
+                                    viewModel::updateExportPassphraseConfirm,
+                                valid = viewModel.exportPassphraseValid(),
+                                busy = isBusy,
+                                onExport = {
+                                    requireUserVerification(
+                                        context = context,
+                                        title = "Export SSH backup",
+                                        subtitle = "Authenticate to create an encrypted backup",
+                                    ) { result ->
+                                        // Export materialises every private key and password, so
+                                        // it requires a real authentication. `Unavailable` means no
+                                        // device credential is enrolled: fail closed instead of
+                                        // exporting unauthenticated.
+                                        if (result == VerificationResult.Success) {
+                                            exportLauncher.launch(defaultBackupFileName())
+                                        }
                                     }
-                                }
-                            },
-                            onCancel = {
-                                viewModel.updateExportPassphrase("")
-                                viewModel.updateExportPassphraseConfirm("")
-                                localStep = SheetStep.Overview
-                            },
-                        )
+                                },
+                                onCancel = {
+                                    viewModel.updateExportPassphrase("")
+                                    viewModel.updateExportPassphraseConfirm("")
+                                    localStep = SheetStep.Overview
+                                },
+                            )
 
-                        is SheetStep.ImportPassphrase -> ImportPassphraseContent(
-                            passphrase = importPassphrase,
-                            onPassphraseChange = viewModel::updateImportPassphrase,
-                            valid = viewModel.importPassphraseValid(),
-                            busy = isBusy,
-                            onImport = {
-                                requireUserVerification(
-                                    context = context,
-                                    title = "Import SSH backup",
-                                    subtitle = "Authenticate to restore an encrypted backup",
-                                ) { result ->
-                                    // Import can install attacker-supplied keys and host
-                                    // profiles, so it also requires a real authentication.
-                                    if (result == VerificationResult.Success) {
-                                        importLauncher.launch(arrayOf(CHUCHU_BACKUP_MIME_TYPE, "*/*"))
+                        is SheetStep.ImportPassphrase ->
+                            ImportPassphraseContent(
+                                passphrase = importPassphrase,
+                                onPassphraseChange = viewModel::updateImportPassphrase,
+                                valid = viewModel.importPassphraseValid(),
+                                busy = isBusy,
+                                onImport = {
+                                    requireUserVerification(
+                                        context = context,
+                                        title = "Import SSH backup",
+                                        subtitle = "Authenticate to restore an encrypted backup",
+                                    ) { result ->
+                                        // Import can install attacker-supplied keys and host
+                                        // profiles, so it also requires a real authentication.
+                                        if (result == VerificationResult.Success) {
+                                            importLauncher.launch(
+                                                arrayOf(CHUCHU_BACKUP_MIME_TYPE, "*/*")
+                                            )
+                                        }
                                     }
-                                }
-                            },
-                            onCancel = {
-                                viewModel.updateImportPassphrase("")
-                                localStep = SheetStep.Overview
-                            },
-                        )
+                                },
+                                onCancel = {
+                                    viewModel.updateImportPassphrase("")
+                                    localStep = SheetStep.Overview
+                                },
+                            )
 
-                        is SheetStep.ImportPreview -> ImportPreviewContent(
-                            plan = effectiveStep.plan,
-                            busy = isBusy,
-                            onConfirm = viewModel::confirmImport,
-                            onCancel = {
-                                viewModel.cancelImport()
-                                localStep = SheetStep.Overview
-                            },
-                        )
-
+                        is SheetStep.ImportPreview ->
+                            ImportPreviewContent(
+                                plan = effectiveStep.plan,
+                                busy = isBusy,
+                                onConfirm = viewModel::confirmImport,
+                                onCancel = {
+                                    viewModel.cancelImport()
+                                    localStep = SheetStep.Overview
+                                },
+                            )
                     }
 
                     // ── Status messages ────────────────────────────────────
@@ -334,7 +338,10 @@ internal fun SshBackupSheet(
                     }
 
                     error?.let { msg ->
-                        ChuCard(modifier = Modifier.fillMaxWidth(), background = colors.error.copy(alpha = 0.12f)) {
+                        ChuCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            background = colors.error.copy(alpha = 0.12f),
+                        ) {
                             ChuText(
                                 text = msg,
                                 style = typography.body,
@@ -345,7 +352,10 @@ internal fun SshBackupSheet(
                     }
 
                     success?.let { msg ->
-                        ChuCard(modifier = Modifier.fillMaxWidth(), background = colors.accent.copy(alpha = 0.12f)) {
+                        ChuCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            background = colors.accent.copy(alpha = 0.12f),
+                        ) {
                             ChuText(
                                 text = msg,
                                 style = typography.body,
@@ -363,9 +373,7 @@ internal fun SshBackupSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ChuButton(
-                            onClick = {
-                                viewModel.clearMessages()
-                            },
+                            onClick = { viewModel.clearMessages() },
                             variant = ChuButtonVariant.Outlined,
                             bracketed = true,
                             modifier = Modifier.weight(1f),
@@ -385,28 +393,28 @@ internal fun SshBackupSheet(
         ) {
             val key = selectedKeyDetails ?: return@AnimatedVisibility
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colors.background.copy(alpha = 0.40f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { selectedKeyDetails = null },
-                    ),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.55f)
-                        .background(colors.surfaceVariant)
+                modifier =
+                    Modifier.fillMaxSize()
+                        .background(colors.background.copy(alpha = 0.40f))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = {},
+                            onClick = { selectedKeyDetails = null },
                         )
-                        .windowInsetsPadding(WindowInsets.safeDrawing)
-                        .padding(16.dp),
+            ) {
+                Column(
+                    modifier =
+                        Modifier.align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.55f)
+                            .background(colors.surfaceVariant)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {},
+                            )
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                            .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Row(
@@ -426,10 +434,7 @@ internal fun SshBackupSheet(
                         }
                     }
 
-                    KeyDetailsContent(
-                        key = key,
-                        onBack = { selectedKeyDetails = null },
-                    )
+                    KeyDetailsContent(key = key, onBack = { selectedKeyDetails = null })
                 }
             }
         }
@@ -468,7 +473,10 @@ private fun OverviewContent(
                 keys.forEachIndexed { index, key ->
                     KeyInfoRow(key = key, onClick = { onOpenKey(key) })
                     if (index < keys.lastIndex) {
-                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                        Box(
+                            modifier =
+                                Modifier.fillMaxWidth().height(1.dp).background(colors.border)
+                        )
                     }
                 }
             } else {
@@ -481,17 +489,15 @@ private fun OverviewContent(
 
             // Warning about encrypted secrets
             ChuText(
-                text = "Backups include all private keys, passwords, and passphrases inside an encrypted file.",
+                text =
+                    "Backups include all private keys, passwords, and passphrases inside an encrypted file.",
                 style = typography.bodySmall,
                 color = colors.textMuted,
             )
         }
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ChuButton(
             onClick = onExport,
             enabled = !busy,
@@ -522,10 +528,7 @@ private fun KeyInfoRow(key: SshKey, onClick: () -> Unit) {
     val shortPublic = publicKeyShortPrefix(key)
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -551,10 +554,7 @@ private fun KeyInfoRow(key: SshKey, onClick: () -> Unit) {
 }
 
 @Composable
-private fun KeyDetailsContent(
-    key: SshKey,
-    onBack: () -> Unit,
-) {
+private fun KeyDetailsContent(key: SshKey, onBack: () -> Unit) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
     val clipboard = LocalClipboardManager.current
@@ -572,7 +572,12 @@ private fun KeyDetailsContent(
     }
 
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ChuButton(onClick = onBack, variant = ChuButtonVariant.Ghost, bracketed = true, modifier = Modifier.weight(1f)) {
+        ChuButton(
+            onClick = onBack,
+            variant = ChuButtonVariant.Ghost,
+            bracketed = true,
+            modifier = Modifier.weight(1f),
+        ) {
             ChuText("back", style = typography.label, color = colors.textMuted)
         }
         ChuButton(
@@ -655,10 +660,7 @@ private fun ExportPassphraseContent(
         }
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ChuButton(
             onClick = onCancel,
             variant = ChuButtonVariant.Ghost,
@@ -717,10 +719,7 @@ private fun ImportPassphraseContent(
         }
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ChuButton(
             onClick = onCancel,
             variant = ChuButtonVariant.Ghost,
@@ -837,17 +836,15 @@ private fun ImportPreviewContent(
             }
 
             ChuText(
-                text = "Existing data will not be overwritten. Conflicting names will be auto-renamed.",
+                text =
+                    "Existing data will not be overwritten. Conflicting names will be auto-renamed.",
                 style = typography.bodySmall,
                 color = colors.textMuted,
             )
         }
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ChuButton(
             onClick = onCancel,
             variant = ChuButtonVariant.Ghost,

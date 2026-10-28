@@ -26,16 +26,15 @@ object ChuchuBackupCodec {
 
     private val nativeBridge = NativeBackupBridge()
 
-    fun encrypt(
-        payload: BackupPayload,
-        passphrase: CharArray,
-    ): ByteArray {
+    fun encrypt(payload: BackupPayload, passphrase: CharArray): ByteArray {
         require(passphrase.isNotEmpty()) { "Backup passphrase must not be empty" }
         val plaintext = encodePayload(payload)
         return try {
-            if (!nativeBridge.isLoaded()) throw BackupFormatException("Native backup encryption is unavailable")
-            val result = nativeBridge.nativeEncrypt(plaintext, passphrase)
-                ?: throw BackupFormatException("Native backup encryption failed")
+            if (!nativeBridge.isLoaded())
+                throw BackupFormatException("Native backup encryption is unavailable")
+            val result =
+                nativeBridge.nativeEncrypt(plaintext, passphrase)
+                    ?: throw BackupFormatException("Native backup encryption failed")
             decodeNativeResult(result, allowInvalidPassphrase = false)
         } finally {
             plaintext.fill(0)
@@ -45,9 +44,11 @@ object ChuchuBackupCodec {
     @Throws(BackupFormatException::class, InvalidBackupPassphraseException::class)
     fun decrypt(bytes: ByteArray, passphrase: CharArray): BackupPayload {
         require(passphrase.isNotEmpty()) { "Backup passphrase must not be empty" }
-        if (!nativeBridge.isLoaded()) throw BackupFormatException("Native backup decryption is unavailable")
-        val result = nativeBridge.nativeDecrypt(bytes, passphrase)
-            ?: throw BackupFormatException("Native backup decryption failed")
+        if (!nativeBridge.isLoaded())
+            throw BackupFormatException("Native backup decryption is unavailable")
+        val result =
+            nativeBridge.nativeDecrypt(bytes, passphrase)
+                ?: throw BackupFormatException("Native backup decryption failed")
         val plaintext = decodeNativeResult(result, allowInvalidPassphrase = true)
         return try {
             decodePayload(plaintext)
@@ -105,7 +106,8 @@ object ChuchuBackupCodec {
         }
 
         val encoded = writer.toByteArray()
-        if (encoded.size > MAX_BACKUP_SIZE_BYTES) throw BackupFormatException("Backup payload is too large")
+        if (encoded.size > MAX_BACKUP_SIZE_BYTES)
+            throw BackupFormatException("Backup payload is too large")
         return encoded
     }
 
@@ -123,82 +125,87 @@ object ChuchuBackupCodec {
 
         fun <T : Enum<T>> readEnumField(label: String, values: Array<T>): T {
             val value = readStringField(label)
-            return values.firstOrNull { it.name == value } ?: throw BackupFormatException("Unknown $label")
+            return values.firstOrNull { it.name == value }
+                ?: throw BackupFormatException("Unknown $label")
         }
 
         fun readNullableMultiplexerField(label: String): MultiplexerType? {
             val value = readNullableStringField(label) ?: return null
-            return MultiplexerType.fromPersistedValue(value) ?: throw BackupFormatException("Unknown $label")
+            return MultiplexerType.fromPersistedValue(value)
+                ?: throw BackupFormatException("Unknown $label")
         }
 
         if (reader.readInt() != PAYLOAD_MAGIC) throw BackupFormatException("Invalid backup payload")
         val version = reader.readInt()
-        if (version !in 1..PAYLOAD_VERSION) throw BackupFormatException("Unsupported backup payload version")
+        if (version !in 1..PAYLOAD_VERSION)
+            throw BackupFormatException("Unsupported backup payload version")
 
         val keyCount = reader.readPositiveInt("key count")
         validateItemCount(keyCount, "key count")
-        val keys = buildList(keyCount) {
-            repeat(keyCount) {
-                add(
-                    BackupSshKey(
-                        id = reader.readLong(),
-                        name = readStringField("key name"),
-                        algorithm = readStringField("key algorithm"),
-                        privateKeyPem = readStringField("private key"),
-                        publicKeyOpenSsh = readStringField("public key"),
-                        createdAtEpochMs = reader.readLong(),
-                    ),
-                )
-            }
-        }
-
-        val hostCount = reader.readPositiveInt("host count")
-        validateItemCount(hostCount, "host count")
-        val hosts = buildList(hostCount) {
-            repeat(hostCount) {
-                val id = reader.readLong()
-                val name = readStringField("host name")
-                val host = readStringField("host")
-                val port = reader.readInt()
-                val username = readStringField("username")
-                val password = readStringField("password")
-                val keyId = reader.readNullableLong()
-                val keyPassphrase = readStringField("key passphrase")
-                val transport = readEnumField("transport", enumValues<Transport>())
-                val authMethod = readEnumField("auth method", enumValues<AuthMethod>())
-                val requireAuthOnConnect = reader.readBoolean()
-                val postConnectCommand = readNullableStringField("post-connect command")
-                val multiplexer = if (version >= 2) {
-                    readNullableMultiplexerField("multiplexer")
-                } else {
-                    null
-                }
-                if (transport != Transport.LocalShell) {
+        val keys =
+            buildList(keyCount) {
+                repeat(keyCount) {
                     add(
-                        BackupHostProfile(
-                            id = id,
-                            name = name,
-                            host = host,
-                            port = port,
-                            username = username,
-                            password = password,
-                            keyId = keyId,
-                            keyPassphrase = keyPassphrase,
-                            transport = transport,
-                            authMethod = authMethod,
-                            requireAuthOnConnect = requireAuthOnConnect,
-                            postConnectCommand = postConnectCommand,
-                            multiplexer = multiplexer,
-                        ),
+                        BackupSshKey(
+                            id = reader.readLong(),
+                            name = readStringField("key name"),
+                            algorithm = readStringField("key algorithm"),
+                            privateKeyPem = readStringField("private key"),
+                            publicKeyOpenSsh = readStringField("public key"),
+                            createdAtEpochMs = reader.readLong(),
+                        )
                     )
                 }
             }
-        }
+
+        val hostCount = reader.readPositiveInt("host count")
+        validateItemCount(hostCount, "host count")
+        val hosts =
+            buildList(hostCount) {
+                repeat(hostCount) {
+                    val id = reader.readLong()
+                    val name = readStringField("host name")
+                    val host = readStringField("host")
+                    val port = reader.readInt()
+                    val username = readStringField("username")
+                    val password = readStringField("password")
+                    val keyId = reader.readNullableLong()
+                    val keyPassphrase = readStringField("key passphrase")
+                    val transport = readEnumField("transport", enumValues<Transport>())
+                    val authMethod = readEnumField("auth method", enumValues<AuthMethod>())
+                    val requireAuthOnConnect = reader.readBoolean()
+                    val postConnectCommand = readNullableStringField("post-connect command")
+                    val multiplexer =
+                        if (version >= 2) {
+                            readNullableMultiplexerField("multiplexer")
+                        } else {
+                            null
+                        }
+                    if (transport != Transport.LocalShell) {
+                        add(
+                            BackupHostProfile(
+                                id = id,
+                                name = name,
+                                host = host,
+                                port = port,
+                                username = username,
+                                password = password,
+                                keyId = keyId,
+                                keyPassphrase = keyPassphrase,
+                                transport = transport,
+                                authMethod = authMethod,
+                                requireAuthOnConnect = requireAuthOnConnect,
+                                postConnectCommand = postConnectCommand,
+                                multiplexer = multiplexer,
+                            )
+                        )
+                    }
+                }
+            }
 
         if (!reader.isEof()) throw BackupFormatException("Unexpected trailing payload data")
         return BackupPayload(keys = keys, hosts = hosts)
     }
-
 
     private fun decodeNativeResult(result: ByteArray, allowInvalidPassphrase: Boolean): ByteArray {
         if (result.isEmpty()) throw BackupFormatException("Invalid native backup response")
@@ -289,10 +296,11 @@ object ChuchuBackupCodec {
 
         fun readInt(): Int {
             ensureRemaining(Int.SIZE_BYTES, "int")
-            val value = ((bytes[offset].toInt() and 0xff) shl 24) or
-                ((bytes[offset + 1].toInt() and 0xff) shl 16) or
-                ((bytes[offset + 2].toInt() and 0xff) shl 8) or
-                (bytes[offset + 3].toInt() and 0xff)
+            val value =
+                ((bytes[offset].toInt() and 0xff) shl 24) or
+                    ((bytes[offset + 1].toInt() and 0xff) shl 16) or
+                    ((bytes[offset + 2].toInt() and 0xff) shl 8) or
+                    (bytes[offset + 3].toInt() and 0xff)
             offset += Int.SIZE_BYTES
             return value
         }
@@ -317,8 +325,7 @@ object ChuchuBackupCodec {
             return bytes[offset++].toInt() != 0
         }
 
-        fun readNullableLong(): Long? =
-            if (readBoolean()) readLong() else null
+        fun readNullableLong(): Long? = if (readBoolean()) readLong() else null
 
         fun readPositiveInt(label: String): Int {
             val value = readInt()

@@ -4,9 +4,8 @@ import java.nio.ByteBuffer
 
 class GhosttyBridge {
     companion object {
-        private val loadError: Throwable? = runCatching {
-            System.loadLibrary("chuchu_jni")
-        }.exceptionOrNull()
+        private val loadError: Throwable? =
+            runCatching { System.loadLibrary("chuchu_jni") }.exceptionOrNull()
     }
 
     fun nativeStatus(): String {
@@ -21,18 +20,31 @@ class GhosttyBridge {
     fun isLoaded(): Boolean = loadError == null
 
     external fun nativeVersion(): String
+
     external fun nativeCreate(cols: Int, rows: Int, maxScrollback: Int): Long
+
     external fun nativeDestroy(handle: Long)
+
     external fun nativeWriteRemote(handle: Long, data: ByteArray)
+
     external fun nativeResize(handle: Long, cols: Int, rows: Int, cellW: Int, cellH: Int)
+
     external fun nativeScroll(handle: Long, delta: Int, x: Float, y: Float)
+
     external fun nativeScrollToActive(handle: Long)
+
     external fun nativeSnapshot(handle: Long): ByteBuffer
+
     external fun nativePollTitle(handle: Long): String?
+
     external fun nativePollPwd(handle: Long): String?
+
     external fun nativePollClipboard(handle: Long): ByteArray?
+
     external fun nativeDrainBellCount(handle: Long): Int
+
     external fun nativeSetColorScheme(handle: Long, scheme: Int)
+
     external fun nativeSetDefaultColors(
         handle: Long,
         fgRgb: IntArray?,
@@ -40,8 +52,18 @@ class GhosttyBridge {
         cursorRgb: IntArray?,
         paletteRgb: ByteArray?,
     )
-    external fun nativeEncodeKey(handle: Long, key: Int, cp: Int, mods: Int, action: Int, utf8: String?): ByteArray?
+
+    external fun nativeEncodeKey(
+        handle: Long,
+        key: Int,
+        cp: Int,
+        mods: Int,
+        action: Int,
+        utf8: String?,
+    ): ByteArray?
+
     external fun nativeEncodePaste(handle: Long, data: String): ByteArray?
+
     external fun nativeSetMouseEncodingSize(
         handle: Long,
         screenWidth: Int,
@@ -53,6 +75,7 @@ class GhosttyBridge {
         paddingLeft: Int,
         paddingRight: Int,
     )
+
     external fun nativeEncodeMouse(
         handle: Long,
         action: Int,
@@ -63,13 +86,26 @@ class GhosttyBridge {
         anyButtonPressed: Boolean,
         trackLastCell: Boolean,
     ): ByteArray?
+
     external fun nativeEncodeFocus(handle: Long, focused: Boolean): ByteArray?
+
     external fun nativeDrainPtyWrites(handle: Long): ByteArray
+
     external fun nativeSnapshotImages(handle: Long): ByteBuffer
+
     external fun nativeIsImageLoading(handle: Long): Boolean
+
     external fun nativeFormatSelectionRange(handle: Long, startCell: Int, endCell: Int): String?
-    external fun nativeFormatSelectionScreenRange(handle: Long, startScreenCell: Int, endScreenCell: Int): String?
+
+    external fun nativeFormatSelectionScreenRange(
+        handle: Long,
+        startScreenCell: Int,
+        endScreenCell: Int,
+    ): String?
+
     external fun nativeSelectWordAt(handle: Long, cellX: Int, cellY: Int): String?
+
     external fun nativeSelectLineAt(handle: Long, cellX: Int, cellY: Int): String?
+
     external fun nativeSelectAll(handle: Long): String?
 }

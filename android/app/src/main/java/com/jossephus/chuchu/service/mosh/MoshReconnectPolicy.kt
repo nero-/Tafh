@@ -3,8 +3,8 @@ package com.jossephus.chuchu.service.mosh
 /**
  * Keeps transient network loss inside the existing Mosh session.
  *
- * The server expires before the client declares a prolonged outage fatal, so
- * timeout-driven recovery does not replace a remote session that is still alive.
+ * The server expires before the client declares a prolonged outage fatal, so timeout-driven
+ * recovery does not replace a remote session that is still alive.
  */
 internal object MoshReconnectPolicy {
     const val SERVER_NETWORK_TIMEOUT_SECONDS = 30L * 24 * 60 * 60

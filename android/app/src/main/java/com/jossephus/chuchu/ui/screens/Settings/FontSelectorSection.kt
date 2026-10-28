@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,10 +29,7 @@ import com.jossephus.chuchu.ui.theme.ChuFontOption
 import com.jossephus.chuchu.ui.theme.ChuTypography
 
 @Composable
-internal fun FontSelectorSection(
-    currentFont: String,
-    onFontSelected: (String) -> Unit,
-) {
+internal fun FontSelectorSection(currentFont: String, onFontSelected: (String) -> Unit) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
     val current = remember(currentFont) { ChuFontOption.fromId(currentFont) }
@@ -58,23 +55,36 @@ internal fun FontSelectorSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ChuText(current.label, style = typography.label)
-                ChuText(if (expanded) "▲" else "▼", style = typography.labelSmall, color = colors.textMuted)
+                ChuText(
+                    if (expanded) "▲" else "▼",
+                    style = typography.labelSmall,
+                    color = colors.textMuted,
+                )
             }
         }
 
-        AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically()) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.fillMaxWidth()) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 ChuFontOption.entries.forEach { option ->
                     val isSelected = option == current
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(if (isSelected) colors.surface else colors.surfaceVariant)
-                            .clickable {
-                                onFontSelected(option.id)
-                                expanded = false
-                            }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .background(
+                                    if (isSelected) colors.surface else colors.surfaceVariant
+                                )
+                                .clickable {
+                                    onFontSelected(option.id)
+                                    expanded = false
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -86,7 +96,8 @@ internal fun FontSelectorSection(
                                 style = typography.label,
                                 color = if (isSelected) colors.accent else colors.textPrimary,
                             )
-                            if (isSelected) ChuText("●", style = typography.label, color = colors.accent)
+                            if (isSelected)
+                                ChuText("●", style = typography.label, color = colors.accent)
                         }
                     }
                 }

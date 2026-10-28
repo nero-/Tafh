@@ -32,6 +32,14 @@ ktlint_standard_chain-wrapping = disabled
 ktlint_standard_chain-method-continuation = disabled
 ktlint_standard_function-signature = disabled
 ktlint_standard_multiline-expression-wrapping = disabled
+# ktfmt wraps a long `if (...)` body differently than ktlint wants; verified by
+# running `ktlint --format` and then `ktfmt --dry-run` on the same file, which
+# rejects ktlint's rewrite. ktfmt owns layout here, so disable the rule.
+ktlint_standard_multiline-if-else = disabled
+ktlint_standard_function-expression-body = disabled
+# Semicolon/comma-separated const lists use lowerCamelCase for protocol names
+# (mouse button ids); the rule would force SCREAMING_SNAKE across the codebase.
+ktlint_standard_property-naming = disabled
 ktlint_standard_string-template-indent = disabled
 ktlint_standard_max-line-length = disabled
 ktlint_standard_no-blank-line-before-rbrace = disabled

@@ -1,26 +1,39 @@
 package com.jossephus.chuchu.data.repository
 
 import android.database.sqlite.SQLiteConstraintException
+import com.jossephus.chuchu.data.crypto.SecretCodec
+import com.jossephus.chuchu.data.db.AppDatabase
 import com.jossephus.chuchu.data.db.SshKeyDao
 import com.jossephus.chuchu.model.SshKey
 import com.jossephus.chuchu.service.ssh.Ed25519KeyGenerator
 import com.jossephus.chuchu.service.ssh.SshKeyImporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
+/**
+ * Reads and writes [SshKey] rows, encrypting [SshKey.privateKeyPem] through [codec] before it
+ * reaches SQLite. Public keys, names and algorithms stay plaintext so they remain queryable and
+ * displayable without the keystore.
+ *
+ * Ciphertext never leaves this class: every read maps rows through [decode]. Legacy rows (plaintext
+ * PEMs from before encryption, or restored from a pre-encryption backup) decrypt as a no-op and are
+ * re-stored encrypted the next time that row is written.
+ */
 class SshKeyRepository(
     private val dao: SshKeyDao,
     private val keyGenerator: Ed25519KeyGenerator = Ed25519KeyGenerator(),
     private val keyImporter: SshKeyImporter = SshKeyImporter(),
+    private val codec: SecretCodec = AppDatabase.secretCodec,
 ) {
-    fun observeAll(): Flow<List<SshKey>> = dao.observeAll()
+    fun observeAll(): Flow<List<SshKey>> = dao.observeAll().map { rows -> rows.map(::decode) }
 
-    suspend fun getById(id: Long): SshKey? = dao.getById(id)
+    suspend fun getById(id: Long): SshKey? = dao.getById(id)?.let(::decode)
 
-    suspend fun getAll(): List<SshKey> = dao.getAll()
+    suspend fun getAll(): List<SshKey> = dao.getAll().map(::decode)
 
-    suspend fun insert(key: SshKey): Long = dao.insert(key)
+    suspend fun insert(key: SshKey): Long = dao.insert(encode(key))
 
     suspend fun deleteById(id: Long) = dao.deleteById(id)
 
@@ -35,7 +48,7 @@ class SshKeyRepository(
                     return KeyGenerationResult.Failed
                 }
             try {
-                return KeyGenerationResult.Success(key.copy(id = dao.insert(key)))
+                return KeyGenerationResult.Success(key.copy(id = dao.insert(encode(key))))
             } catch (_: SQLiteConstraintException) {
                 name = uniquify(base, dao.getAll().mapTo(HashSet()) { it.name })
             }
@@ -61,7 +74,7 @@ class SshKeyRepository(
                 )
             try {
                 return ImportResult.Success(
-                    key.copy(id = dao.insert(key)),
+                    key.copy(id = dao.insert(encode(key))),
                     publicKeyDerived = derived != null,
                 )
             } catch (_: SQLiteConstraintException) {
@@ -81,6 +94,12 @@ class SshKeyRepository(
             RenameResult.NameTaken
         }
     }
+
+    private fun encode(key: SshKey): SshKey =
+        key.copy(privateKeyPem = codec.encrypt(key.privateKeyPem))
+
+    private fun decode(key: SshKey): SshKey =
+        key.copy(privateKeyPem = codec.decrypt(key.privateKeyPem))
 
     private fun normalizeAlgorithm(keytype: String): String =
         when {

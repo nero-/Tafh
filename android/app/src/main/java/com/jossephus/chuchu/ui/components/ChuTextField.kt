@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -21,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.VisualTransformation
@@ -39,10 +39,8 @@ fun ChuTextField(
     showLabel: Boolean = true,
     modifier: Modifier = Modifier,
     visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions(
-        capitalization = KeyboardCapitalization.None,
-        autoCorrectEnabled = false,
-    ),
+    keyboardOptions: KeyboardOptions =
+        KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
     autoFocus: Boolean = true,
     textAlign: TextAlign = TextAlign.Start,
 ) {
@@ -55,9 +53,7 @@ fun ChuTextField(
 
     // Only request focus if autoFocus is true
     if (autoFocus) {
-        LaunchedEffect(Unit) {
-            focusRequester.requestFocus()
-        }
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
     }
 
     Column(modifier = modifier) {
@@ -72,15 +68,15 @@ fun ChuTextField(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .background(if (focused) colors.surface else Color.Transparent, shape)
-                .border(
-                    BorderStroke(1.dp, if (focused) colors.accent else colors.border),
-                    shape,
-                )
-                .padding(horizontal = 10.dp, vertical = 9.dp),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .background(if (focused) colors.surface else Color.Transparent, shape)
+                    .border(
+                        BorderStroke(1.dp, if (focused) colors.accent else colors.border),
+                        shape,
+                    )
+                    .padding(horizontal = 10.dp, vertical = 9.dp),
             singleLine = singleLine,
             textStyle = typography.body.copy(color = colors.textPrimary, textAlign = textAlign),
             keyboardOptions = keyboardOptions,

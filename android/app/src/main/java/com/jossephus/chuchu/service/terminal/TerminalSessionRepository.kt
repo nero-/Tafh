@@ -3,6 +3,7 @@ package com.jossephus.chuchu.service.terminal
 import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
+import com.jossephus.chuchu.data.repository.SettingsRepository
 import com.jossephus.chuchu.model.MultiplexerType
 import com.jossephus.chuchu.model.Transport
 import com.jossephus.chuchu.service.multiplexer.MultiplexerRegistry
@@ -31,7 +32,10 @@ import kotlinx.coroutines.sync.withLock
 @OptIn(ExperimentalCoroutinesApi::class)
 class TerminalSessionRepository private constructor(application: Application) {
     private enum class Osc52ClipboardPolicy {
+        /** Never let a remote program write the local clipboard. Default. */
         Deny,
+
+        /** Forward OSC 52 only from the visible, attached, foreground tab. */
         AllowActiveForegroundSession,
     }
 
@@ -39,10 +43,20 @@ class TerminalSessionRepository private constructor(application: Application) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val hostKeyStore =
-        HostKeyStore(appContext.getSharedPreferences(HostKeyStore.PREFS_NAME, Application.MODE_PRIVATE))
+        HostKeyStore(
+            appContext.getSharedPreferences(HostKeyStore.PREFS_NAME, Application.MODE_PRIVATE)
+        )
     private val tailscaleStatusChecker = TailscaleStatusChecker(appContext)
     private val clipboard = appContext.getSystemService(ClipboardManager::class.java)
-    private val osc52ClipboardPolicy = Osc52ClipboardPolicy.Deny
+    // Remote clipboard writes are denied unless the user opts in from settings.
+    private val settingsRepository = SettingsRepository.getInstance(appContext)
+
+    private fun resolveOsc52ClipboardPolicy(): Osc52ClipboardPolicy =
+        if (settingsRepository.remoteClipboardWriteEnabled.value) {
+            Osc52ClipboardPolicy.AllowActiveForegroundSession
+        } else {
+            Osc52ClipboardPolicy.Deny
+        }
 
     private fun publishTerminalClipboard(tabId: String, text: String) {
         if (!canPublishTerminalClipboard(tabId)) return
@@ -50,7 +64,9 @@ class TerminalSessionRepository private constructor(application: Application) {
     }
 
     private fun canPublishTerminalClipboard(tabId: String): Boolean {
-        if (osc52ClipboardPolicy != Osc52ClipboardPolicy.AllowActiveForegroundSession) return false
+        if (resolveOsc52ClipboardPolicy() != Osc52ClipboardPolicy.AllowActiveForegroundSession) {
+            return false
+        }
         return attachedClients > 0 && _activeTabId.value == tabId
     }
 
@@ -80,7 +96,9 @@ class TerminalSessionRepository private constructor(application: Application) {
             .stateIn(scope, SharingStarted.Eagerly, null)
 
     val hostKeyPrompt: StateFlow<HostKeyPrompt?> =
-        combine(_preflightHostKeyPrompt, activeHostKeyPrompt) { preflight, active -> preflight ?: active }
+        combine(_preflightHostKeyPrompt, activeHostKeyPrompt) { preflight, active ->
+                preflight ?: active
+            }
             .stateIn(scope, SharingStarted.Eagerly, null)
 
     val connectedHostIds: StateFlow<Set<Long>> =
@@ -131,7 +149,10 @@ class TerminalSessionRepository private constructor(application: Application) {
                                 state.status == SessionStatus.Reconnecting
                         }
                     val label = if (anyAlive) currentNotificationLabel() else null
-                    if (anyAlive && (!foregroundServiceRunning || foregroundNotificationLabel != label)) {
+                    if (
+                        anyAlive &&
+                            (!foregroundServiceRunning || foregroundNotificationLabel != label)
+                    ) {
                         SessionForegroundService.start(appContext, label ?: "Active session")
                         foregroundServiceRunning = true
                         foregroundNotificationLabel = label
@@ -166,9 +187,10 @@ class TerminalSessionRepository private constructor(application: Application) {
     fun openMultiplexerSessionNamesForHost(
         hostId: Long?,
         multiplexer: MultiplexerType,
-    ): List<String> = tabsForHost(hostId)
-        .filter { it.spec.multiplexer == multiplexer }
-        .mapNotNull { it.spec.multiplexerSessionName }
+    ): List<String> =
+        tabsForHost(hostId)
+            .filter { it.spec.multiplexer == multiplexer }
+            .mapNotNull { it.spec.multiplexerSessionName }
 
     suspend fun resolveMultiplexerSessionName(
         spec: TabSpec,
@@ -176,16 +198,19 @@ class TerminalSessionRepository private constructor(application: Application) {
     ): String = withPreflightEngine { engine ->
         engine.resolveMultiplexerSessionName(
             spec = spec,
-            localSessionNames = openMultiplexerSessionNamesForHost(
-                hostId = spec.hostId,
-                multiplexer = spec.multiplexer ?: MultiplexerRegistry.defaultType,
-            ),
+            localSessionNames =
+                openMultiplexerSessionNamesForHost(
+                    hostId = spec.hostId,
+                    multiplexer = spec.multiplexer ?: MultiplexerRegistry.defaultType,
+                ),
             reuseDetachedChuchuSession = reuseDetachedChuchuSession,
         )
     }
 
     suspend fun listMultiplexerSessions(spec: TabSpec): List<RemoteMultiplexerSession> =
-        withPreflightEngine { engine -> engine.listMultiplexerSessions(spec) }
+        withPreflightEngine { engine ->
+            engine.listMultiplexerSessions(spec)
+        }
 
     private suspend fun <T> withPreflightEngine(block: suspend (TerminalSessionEngine) -> T): T =
         preflightMutex.withLock {
@@ -198,13 +223,14 @@ class TerminalSessionRepository private constructor(application: Application) {
                     tailscaleStatusChecker,
                 )
             preflightEngine = engine
-            val promptJob = scope.launch {
-                engine.hostKeyPrompt.collect { prompt ->
-                    if (preflightEngine === engine) {
-                        _preflightHostKeyPrompt.value = prompt
+            val promptJob =
+                scope.launch {
+                    engine.hostKeyPrompt.collect { prompt ->
+                        if (preflightEngine === engine) {
+                            _preflightHostKeyPrompt.value = prompt
+                        }
                     }
                 }
-            }
             preflightPromptJob = promptJob
             return@withLock try {
                 block(engine)
@@ -277,11 +303,12 @@ class TerminalSessionRepository private constructor(application: Application) {
         val tab = activeTab.value ?: return false
         val type = tab.spec.multiplexer ?: MultiplexerRegistry.defaultType
         MultiplexerRegistry.forType(type) ?: return false
-        val updatedSpec = tab.spec.copy(
-            multiplexer = type,
-            multiplexerSessionName = sessionName,
-            multiplexerCreateIfMissing = false,
-        )
+        val updatedSpec =
+            tab.spec.copy(
+                multiplexer = type,
+                multiplexerSessionName = sessionName,
+                multiplexerCreateIfMissing = false,
+            )
         tab.spec = updatedSpec
         reconnectTab(tab)
         return true
@@ -335,7 +362,9 @@ class TerminalSessionRepository private constructor(application: Application) {
         activeTab.value?.takeIf { it.spec.transport != Transport.LocalShell }?.engine
 
     private fun sftpEngineForTab(tabId: String): TerminalSessionEngine? =
-        _tabs.value.firstOrNull { it.id == tabId && it.spec.transport != Transport.LocalShell }?.engine
+        _tabs.value
+            .firstOrNull { it.id == tabId && it.spec.transport != Transport.LocalShell }
+            ?.engine
 
     fun resize(
         cols: Int,

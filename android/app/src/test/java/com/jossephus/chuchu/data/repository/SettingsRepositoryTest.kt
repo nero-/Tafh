@@ -16,9 +16,9 @@ import org.robolectric.annotation.Config
 /**
  * Robolectric tests for [SettingsRepository].
  *
- * These exercise real [android.content.SharedPreferences] persistence on the JVM: setters
- * must update their flows immediately and survive a fresh repository instance reading the
- * same preference file, which is the behavior the app relies on across process restarts.
+ * These exercise real [android.content.SharedPreferences] persistence on the JVM: setters must
+ * update their flows immediately and survive a fresh repository instance reading the same
+ * preference file, which is the behavior the app relies on across process restarts.
  *
  * Robolectric runs on the JVM with no device or emulator required.
  */
@@ -36,8 +36,16 @@ class SettingsRepositoryTest {
     private fun newRepository() = SettingsRepository(context)
 
     private fun clearPrefs() {
-        context.getSharedPreferences("chuchu_settings", Context.MODE_PRIVATE).edit().clear().commit()
-        context.getSharedPreferences("chuchu_terminal", Context.MODE_PRIVATE).edit().clear().commit()
+        context
+            .getSharedPreferences("chuchu_settings", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+        context
+            .getSharedPreferences("chuchu_terminal", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
     }
 
     @Test
@@ -96,7 +104,8 @@ class SettingsRepositoryTest {
         clearPrefs()
         // The app once stored the font size in the "chuchu_terminal" file; the repository
         // must still pick it up until the user customizes the size in the new store.
-        context.getSharedPreferences("chuchu_terminal", Context.MODE_PRIVATE)
+        context
+            .getSharedPreferences("chuchu_terminal", Context.MODE_PRIVATE)
             .edit()
             .putFloat("terminal_font_size_sp", 18f)
             .commit()
@@ -108,7 +117,8 @@ class SettingsRepositoryTest {
     @Test
     fun `unknown stored enum values fall back instead of crashing`() = runBlocking {
         clearPrefs()
-        context.getSharedPreferences("chuchu_settings", Context.MODE_PRIVATE)
+        context
+            .getSharedPreferences("chuchu_settings", Context.MODE_PRIVATE)
             .edit()
             .putString("terminal_tab_mode", "NOT_A_REAL_MODE")
             .putString("theme_mode", "NOT_A_REAL_MODE")

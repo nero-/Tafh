@@ -15,7 +15,8 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 
 fun terminalImeInputType(disableAutocorrect: Boolean): Int {
-    // TYPE_NULL matches Termux's default and prevents keyboards from treating terminal input as prose.
+    // TYPE_NULL matches Termux's default and prevents keyboards from treating terminal input as
+    // prose.
     if (disableAutocorrect) return InputType.TYPE_NULL
 
     return InputType.TYPE_CLASS_TEXT or
@@ -66,9 +67,9 @@ class TerminalInputView(context: Context) : EditText(context) {
     }
 
     /**
-     * Keys that should drop the IME mirror buffer when delivered as
-     * hardware/Ghostty key events. The terminal handles cursor motion
-     * and line editing itself, so the mirror would only get out of sync.
+     * Keys that should drop the IME mirror buffer when delivered as hardware/Ghostty key events.
+     * The terminal handles cursor motion and line editing itself, so the mirror would only get out
+     * of sync.
      */
     private fun shouldInvalidateImeMirrorForKey(keyCode: Int): Boolean =
         keyCode == KeyEvent.KEYCODE_DEL ||
@@ -98,13 +99,13 @@ class TerminalInputView(context: Context) : EditText(context) {
     }
 
     /**
-     * Drops stale IME mirror state before a virtual key is delivered straight to
-     * the terminal, so the IME cannot replay text the terminal already received.
+     * Drops stale IME mirror state before a virtual key is delivered straight to the terminal, so
+     * the IME cannot replay text the terminal already received.
      *
-     * Only the mirror (composing spans, text, selection) is touched: nothing is
-     * remembered, no time window is armed and the IME is never restarted, so every
-     * later IME edit stays authoritative. Accessory keys repeat rapidly, and a
-     * restart there would both hammer the IME and discard its composing state.
+     * Only the mirror (composing spans, text, selection) is touched: nothing is remembered, no time
+     * window is armed and the IME is never restarted, so every later IME edit stays authoritative.
+     * Accessory keys repeat rapidly, and a restart there would both hammer the IME and discard its
+     * composing state.
      */
     fun armInputSuppression(reason: String) {
         if (DEBUG_INPUT_LOGS) logInput("armSuppression reason=$reason")
@@ -132,9 +133,7 @@ class TerminalInputView(context: Context) : EditText(context) {
         isFocusableInTouchMode = true
         isFocusable = true
         setSingleLine(false)
-        imeOptions =
-            EditorInfo.IME_FLAG_NO_EXTRACT_UI or
-                EditorInfo.IME_ACTION_NONE
+        imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI or EditorInfo.IME_ACTION_NONE
         inputType = terminalImeInputType(disableAutocorrect)
     }
 
@@ -143,16 +142,24 @@ class TerminalInputView(context: Context) : EditText(context) {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (DEBUG_INPUT_LOGS) {
             logInput(
-                "onKeyDown keyCode=$keyCode unicode=${event.unicodeChar} meta=${event.metaState} flags=${event.flags}",
+                "onKeyDown keyCode=$keyCode unicode=${event.unicodeChar} meta=${event.metaState} flags=${event.flags}"
             )
         }
         val ghosttyAction = GhosttyKeyAction.fromAndroid(event.action, event.repeatCount)
         val mapped = KeyMapper.map(keyCode, event.unicodeChar, event.metaState)
         if (mapped != null && ghosttyAction != null) {
-            if (ghosttyAction == GhosttyKeyAction.Press && shouldInvalidateImeMirrorForKey(keyCode)) {
+            if (
+                ghosttyAction == GhosttyKeyAction.Press && shouldInvalidateImeMirrorForKey(keyCode)
+            ) {
                 activeInputConnection?.invalidateImeMirror()
             }
-            onTerminalKey?.invoke(mapped.key, mapped.codepoint, mapped.mods, ghosttyAction, mapped.charCode)
+            onTerminalKey?.invoke(
+                mapped.key,
+                mapped.codepoint,
+                mapped.mods,
+                ghosttyAction,
+                mapped.charCode,
+            )
             return true
         }
         val unicodeChar = event.unicodeChar
@@ -168,7 +175,13 @@ class TerminalInputView(context: Context) : EditText(context) {
         val ghosttyAction = GhosttyKeyAction.fromAndroid(event.action, event.repeatCount)
         val mapped = KeyMapper.map(keyCode, event.unicodeChar, event.metaState)
         if (mapped != null && ghosttyAction != null) {
-            onTerminalKey?.invoke(mapped.key, mapped.codepoint, mapped.mods, ghosttyAction, mapped.charCode)
+            onTerminalKey?.invoke(
+                mapped.key,
+                mapped.codepoint,
+                mapped.mods,
+                ghosttyAction,
+                mapped.charCode,
+            )
             return true
         }
         if (event.unicodeChar != 0) return true
@@ -190,9 +203,10 @@ class TerminalInputView(context: Context) : EditText(context) {
     }
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI or
-            EditorInfo.IME_FLAG_NO_FULLSCREEN or
-            EditorInfo.IME_ACTION_NONE
+        outAttrs.imeOptions =
+            EditorInfo.IME_FLAG_NO_EXTRACT_UI or
+                EditorInfo.IME_FLAG_NO_FULLSCREEN or
+                EditorInfo.IME_ACTION_NONE
         outAttrs.inputType = terminalImeInputType(disableAutocorrect)
         outAttrs.initialSelStart = selectionStart
         outAttrs.initialSelEnd = selectionEnd
@@ -206,25 +220,23 @@ class TerminalInputView(context: Context) : EditText(context) {
     /**
      * IME translation state machine.
      *
-     * The mirror [Editable] is empty whenever no composition is active: it holds
-     * exactly the uncommitted composing region and never retained committed text.
-     * The terminal is the only owner of committed input, so every IME callback is
-     * interpreted from that invariant instead of from a before/after diff:
-     *
+     * The mirror [Editable] is empty whenever no composition is active: it holds exactly the
+     * uncommitted composing region and never retained committed text. The terminal is the only
+     * owner of committed input, so every IME callback is interpreted from that invariant instead of
+     * from a before/after diff:
      * - [commitText] emits the committed characters once and clears the mirror.
      * - [setComposingText] only updates the mirror and emits nothing.
-     * - [deleteSurroundingText] is authoritative: deletes aimed at the composing
-     *   region are cancelled locally, the rest become [0x7f] / `ESC [ 3 ~`.
+     * - [deleteSurroundingText] is authoritative: deletes aimed at the composing region are
+     *   cancelled locally, the rest become [0x7f] / `ESC [ 3 ~`.
      */
-    private class TerminalInputConnection(
-        private val view: TerminalInputView,
-    ) : BaseInputConnection(view, true) {
+    private class TerminalInputConnection(private val view: TerminalInputView) :
+        BaseInputConnection(view, true) {
 
         val connectionId: Int = System.identityHashCode(this)
 
         /**
-         * True while the IME owns an uncommitted composing region in the mirror.
-         * The mirror is empty whenever this is false.
+         * True while the IME owns an uncommitted composing region in the mirror. The mirror is
+         * empty whenever this is false.
          */
         private var composing = false
 
@@ -256,9 +268,8 @@ class TerminalInputView(context: Context) : EditText(context) {
         /**
          * Length in code points of the active composing region.
          *
-         * The mirror holds only uncommitted text, so this is exactly what the
-         * terminal has never seen. Counting code points (not UTF-16 units) keeps a
-         * surrogate pair a single character.
+         * The mirror holds only uncommitted text, so this is exactly what the terminal has never
+         * seen. Counting code points (not UTF-16 units) keeps a surrogate pair a single character.
          */
         private fun composingCodePointCount(): Int {
             val editable = getEditable()
@@ -267,17 +278,18 @@ class TerminalInputView(context: Context) : EditText(context) {
             val end = BaseInputConnection.getComposingSpanEnd(editable)
             val from = minOf(start, end)
             val to = maxOf(start, end)
-            if (from < 0 || to <= from) return Character.codePointCount(editable, 0, editable.length)
+            if (from < 0 || to <= from)
+                return Character.codePointCount(editable, 0, editable.length)
             return Character.codePointCount(editable, from, to.coerceAtMost(editable.length))
         }
 
         /**
          * Shared delete translation for both IME delete variants.
          *
-         * Deletes covered by the composition are cancelled locally: the terminal
-         * never received that text, so it must not see bytes for it. Anything
-         * beyond the composition is a real delete, one backspace per code point
-         * before the cursor and one `ESC [ 3 ~` per code point after.
+         * Deletes covered by the composition are cancelled locally: the terminal never received
+         * that text, so it must not see bytes for it. Anything beyond the composition is a real
+         * delete, one backspace per code point before the cursor and one `ESC [ 3 ~` per code point
+         * after.
          */
         private fun emitDelete(source: String, beforeLength: Int, afterLength: Int) {
             val composed = if (composing) composingCodePointCount() else 0
@@ -287,19 +299,15 @@ class TerminalInputView(context: Context) : EditText(context) {
             val terminalAfter = requestedAfter - minOf(requestedAfter, composed)
             dropMirror(source)
 
-            repeat(terminalBefore) {
-                view.emitBackspaceText(source)
-            }
-            repeat(terminalAfter) {
-                view.emitTerminalText(source, "\u001b[3~")
-            }
+            repeat(terminalBefore) { view.emitBackspaceText(source) }
+            repeat(terminalAfter) { view.emitTerminalText(source, "\u001b[3~") }
         }
 
         override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
             val committed = text?.toString().orEmpty()
             if (DEBUG_INPUT_LOGS) {
                 logConn(
-                    "commitText text=${view.describeText(committed)} cursor=$newCursorPosition composing=$composing",
+                    "commitText text=${view.describeText(committed)} cursor=$newCursorPosition composing=$composing"
                 )
             }
             // A commit supersedes whatever was composing and the mirror must not
@@ -313,7 +321,7 @@ class TerminalInputView(context: Context) : EditText(context) {
             val composingText = text?.toString().orEmpty()
             if (DEBUG_INPUT_LOGS) {
                 logConn(
-                    "setComposingText text=${view.describeText(composingText)} cursor=$newCursorPosition",
+                    "setComposingText text=${view.describeText(composingText)} cursor=$newCursorPosition"
                 )
             }
             // An empty composing text cancels the composition: the IME discarded
@@ -365,17 +373,18 @@ class TerminalInputView(context: Context) : EditText(context) {
 
         override fun getExtractedText(request: ExtractedTextRequest?, flags: Int): ExtractedText {
             val editable = getEditable()
-            val extracted = ExtractedText().apply {
-                text = editable.toString()
-                startOffset = 0
-                partialStartOffset = -1
-                partialEndOffset = -1
-                selectionStart = Selection.getSelectionStart(editable).coerceAtLeast(0)
-                selectionEnd = Selection.getSelectionEnd(editable).coerceAtLeast(0)
-            }
+            val extracted =
+                ExtractedText().apply {
+                    text = editable.toString()
+                    startOffset = 0
+                    partialStartOffset = -1
+                    partialEndOffset = -1
+                    selectionStart = Selection.getSelectionStart(editable).coerceAtLeast(0)
+                    selectionEnd = Selection.getSelectionEnd(editable).coerceAtLeast(0)
+                }
             if (DEBUG_INPUT_LOGS) {
                 logConn(
-                    "getExtractedText flags=$flags text=${view.describeText(extracted.text.toString())} sel=${extracted.selectionStart}..${extracted.selectionEnd}",
+                    "getExtractedText flags=$flags text=${view.describeText(extracted.text.toString())} sel=${extracted.selectionStart}..${extracted.selectionEnd}"
                 )
             }
             return extracted
@@ -384,7 +393,7 @@ class TerminalInputView(context: Context) : EditText(context) {
         override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
             if (DEBUG_INPUT_LOGS) {
                 logConn(
-                    "deleteSurroundingText beforeLen=$beforeLength afterLen=$afterLength composing=$composing",
+                    "deleteSurroundingText beforeLen=$beforeLength afterLen=$afterLength composing=$composing"
                 )
             }
             emitDelete("deleteSurroundingText", beforeLength, afterLength)
@@ -392,14 +401,16 @@ class TerminalInputView(context: Context) : EditText(context) {
         }
 
         /**
-         * Samsung keyboards and other IMEs use the code-point variant for
-         * backspace; the base implementation only edits the mirror, so it would
-         * send nothing.
+         * Samsung keyboards and other IMEs use the code-point variant for backspace; the base
+         * implementation only edits the mirror, so it would send nothing.
          */
-        override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
+        override fun deleteSurroundingTextInCodePoints(
+            beforeLength: Int,
+            afterLength: Int,
+        ): Boolean {
             if (DEBUG_INPUT_LOGS) {
                 logConn(
-                    "deleteSurroundingTextInCodePoints beforeLen=$beforeLength afterLen=$afterLength composing=$composing",
+                    "deleteSurroundingTextInCodePoints beforeLen=$beforeLength afterLen=$afterLength composing=$composing"
                 )
             }
             emitDelete("deleteSurroundingTextInCodePoints", beforeLength, afterLength)
@@ -419,17 +430,26 @@ class TerminalInputView(context: Context) : EditText(context) {
         override fun sendKeyEvent(event: KeyEvent): Boolean {
             if (DEBUG_INPUT_LOGS) {
                 logConn(
-                    "sendKeyEvent action=${event.action} keyCode=${event.keyCode} unicode=${event.unicodeChar} meta=${event.metaState} flags=${event.flags}",
+                    "sendKeyEvent action=${event.action} keyCode=${event.keyCode} unicode=${event.unicodeChar} meta=${event.metaState} flags=${event.flags}"
                 )
             }
             val ghosttyAction = GhosttyKeyAction.fromAndroid(event.action, event.repeatCount)
             if (ghosttyAction != null) {
                 val mapped = KeyMapper.map(event.keyCode, event.unicodeChar, event.metaState)
                 if (mapped != null) {
-                    if (ghosttyAction == GhosttyKeyAction.Press && view.shouldInvalidateImeMirrorForKey(event.keyCode)) {
+                    if (
+                        ghosttyAction == GhosttyKeyAction.Press &&
+                            view.shouldInvalidateImeMirrorForKey(event.keyCode)
+                    ) {
                         invalidateImeMirror()
                     }
-                    view.onTerminalKey?.invoke(mapped.key, mapped.codepoint, mapped.mods, ghosttyAction, mapped.charCode)
+                    view.onTerminalKey?.invoke(
+                        mapped.key,
+                        mapped.codepoint,
+                        mapped.mods,
+                        ghosttyAction,
+                        mapped.charCode,
+                    )
                     return true
                 }
             }

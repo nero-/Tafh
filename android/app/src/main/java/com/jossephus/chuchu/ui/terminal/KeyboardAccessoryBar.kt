@@ -71,9 +71,7 @@ fun KeyboardAccessoryBar(
     val buttonHeight = 30.dp
     val buttonPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 3.dp, bottom = 3.dp)
     var expandedGroupId by remember { mutableStateOf<String?>(null) }
-    val onChildAction: (AccessoryAction) -> Unit = { action ->
-        onAction(action)
-    }
+    val onChildAction: (AccessoryAction) -> Unit = { action -> onAction(action) }
 
     Column(modifier = modifier) {
         expandedGroupId?.let { groupId ->
@@ -94,10 +92,10 @@ fun KeyboardAccessoryBar(
 
         if (useSingleRow) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = horizontalPadding, vertical = verticalPadding)
-                    .horizontalScroll(rememberScrollState()),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+                        .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -131,9 +129,9 @@ fun KeyboardAccessoryBar(
         }
 
         FlowRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = horizontalPadding, vertical = verticalPadding),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             maxLines = 2,
@@ -183,12 +181,12 @@ private fun GroupPopover(
         exit = fadeOut() + shrinkVertically(),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = horizontalPadding, vertical = 4.dp)
-                .background(colors.surface)
-                .padding(horizontal = 6.dp, vertical = 6.dp)
-                .horizontalScroll(rememberScrollState()),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = horizontalPadding, vertical = 4.dp)
+                    .background(colors.surface)
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+                    .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -332,13 +330,14 @@ private fun FilesButton(
     ) {
         ChuText(
             text = "",
-            style = TextStyle(
-                fontFamily = ChuSymbolsFontFamily,
-                fontWeight = typography.label.fontWeight,
-                fontStyle = typography.label.fontStyle,
-                fontSize = 16.sp,
-                lineHeight = 16.sp,
-            ),
+            style =
+                TextStyle(
+                    fontFamily = ChuSymbolsFontFamily,
+                    fontWeight = typography.label.fontWeight,
+                    fontStyle = typography.label.fontStyle,
+                    fontSize = 16.sp,
+                    lineHeight = 16.sp,
+                ),
             color = colors.textPrimary,
         )
     }
@@ -375,42 +374,44 @@ private fun RepeatableAccessoryButton(
     val currentOnAction by rememberUpdatedState(onAction)
 
     Box(
-        modifier = Modifier
-            .height(buttonHeight)
-            .pointerInput(item.action) {
-                awaitEachGesture {
-                    awaitFirstDown().consume()
-                    pressed = true
-                    currentOnAction(item.action)
+        modifier =
+            Modifier.height(buttonHeight)
+                .pointerInput(item.action) {
+                    awaitEachGesture {
+                        awaitFirstDown().consume()
+                        pressed = true
+                        currentOnAction(item.action)
 
-                    try {
-                        val releasedDuringDelay = withTimeoutOrNull(INITIAL_REPEAT_DELAY_MS) {
-                            waitForUpOrCancellation()
-                        }
-
-                        if (releasedDuringDelay == null) {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            while (true) {
-                                currentOnAction(item.action)
-                                val released = withTimeoutOrNull(REPEAT_INTERVAL_MS) {
+                        try {
+                            val releasedDuringDelay =
+                                withTimeoutOrNull(INITIAL_REPEAT_DELAY_MS) {
                                     waitForUpOrCancellation()
                                 }
-                                if (released != null) break
+
+                            if (releasedDuringDelay == null) {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                while (true) {
+                                    currentOnAction(item.action)
+                                    val released =
+                                        withTimeoutOrNull(REPEAT_INTERVAL_MS) {
+                                            waitForUpOrCancellation()
+                                        }
+                                    if (released != null) break
+                                }
                             }
+                        } finally {
+                            pressed = false
                         }
-                    } finally {
-                        pressed = false
                     }
                 }
-            }
-            .semantics {
-                role = Role.Button
-                contentDescription = item.label
-                onClick(label = item.label) {
-                    currentOnAction(item.action)
-                    true
+                .semantics {
+                    role = Role.Button
+                    contentDescription = item.label
+                    onClick(label = item.label) {
+                        currentOnAction(item.action)
+                        true
+                    }
                 }
-            },
     ) {
         ChuButtonSurface(
             modifier = Modifier.height(buttonHeight),

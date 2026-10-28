@@ -22,50 +22,54 @@ object ChuchuBackupImportPlanner {
         payload.keys.forEach { backupKey ->
             val exactExisting = existingKeys.firstOrNull { it.sameContentAs(backupKey) }
             if (exactExisting != null) {
-                keyActions += KeyImportAction.Reuse(
-                    exportedId = backupKey.id,
-                    localId = exactExisting.id,
-                    name = exactExisting.name,
-                )
+                keyActions +=
+                    KeyImportAction.Reuse(
+                        exportedId = backupKey.id,
+                        localId = exactExisting.id,
+                        name = exactExisting.name,
+                    )
                 keyRefs[backupKey.id] = KeyReference.Existing(exactExisting.id)
             } else {
                 val importName = uniqueName(backupKey.name, usedKeyNames)
                 val importKey = backupKey.toEntity(idOverride = 0L).copy(name = importName)
-                keyActions += KeyImportAction.Insert(
-                    exportedId = backupKey.id,
-                    key = importKey,
-                    renamed = importName != backupKey.name,
-                )
+                keyActions +=
+                    KeyImportAction.Insert(
+                        exportedId = backupKey.id,
+                        key = importKey,
+                        renamed = importName != backupKey.name,
+                    )
                 keyRefs[backupKey.id] = KeyReference.Insert(keyActions.lastIndex)
             }
         }
 
         val usedHostNames = existingHosts.map { it.name }.toMutableSet()
-        val hostActions = importableHosts.map { backupHost ->
-            val localKeyId = backupHost.keyId?.let { exportedKeyId ->
-                when (val ref = keyRefs[exportedKeyId]) {
-                    is KeyReference.Existing -> ref.localId
-                    is KeyReference.Insert -> null
-                    null -> throw BackupFormatException("Host references a missing SSH key")
-                }
+        val hostActions =
+            importableHosts.map { backupHost ->
+                val localKeyId =
+                    backupHost.keyId?.let { exportedKeyId ->
+                        when (val ref = keyRefs[exportedKeyId]) {
+                            is KeyReference.Existing -> ref.localId
+                            is KeyReference.Insert -> null
+                            null -> throw BackupFormatException("Host references a missing SSH key")
+                        }
+                    }
+                val importName = uniqueName(backupHost.name, usedHostNames)
+                val importHost =
+                    backupHost
+                        .toEntity(idOverride = 0L, keyIdOverride = localKeyId)
+                        .copy(name = importName)
+                HostImportAction(
+                    exportedId = backupHost.id,
+                    host = importHost,
+                    keyActionIndex =
+                        backupHost.keyId?.let {
+                            (keyRefs[it] as? KeyReference.Insert)?.actionIndex
+                        },
+                    renamed = importName != backupHost.name,
+                )
             }
-            val importName = uniqueName(backupHost.name, usedHostNames)
-            val importHost = backupHost.toEntity(
-                idOverride = 0L,
-                keyIdOverride = localKeyId,
-            ).copy(name = importName)
-            HostImportAction(
-                exportedId = backupHost.id,
-                host = importHost,
-                keyActionIndex = backupHost.keyId?.let { (keyRefs[it] as? KeyReference.Insert)?.actionIndex },
-                renamed = importName != backupHost.name,
-            )
-        }
 
-        return BackupImportPlan(
-            keyActions = keyActions,
-            hostActions = hostActions,
-        )
+        return BackupImportPlan(keyActions = keyActions, hostActions = hostActions)
     }
 
     @Throws(BackupFormatException::class)
@@ -75,8 +79,10 @@ object ChuchuBackupImportPlanner {
             if (key.id <= 0L) throw BackupFormatException("Invalid SSH key id")
             if (!keyIds.add(key.id)) throw BackupFormatException("Duplicate SSH key id")
             if (key.name.isBlank()) throw BackupFormatException("SSH key name is required")
-            if (key.privateKeyPem.isBlank()) throw BackupFormatException("SSH private key is required")
-            if (key.publicKeyOpenSsh.isBlank()) throw BackupFormatException("SSH public key is required")
+            if (key.privateKeyPem.isBlank())
+                throw BackupFormatException("SSH private key is required")
+            if (key.publicKeyOpenSsh.isBlank())
+                throw BackupFormatException("SSH public key is required")
         }
 
         val hostIds = mutableSetOf<Long>()
@@ -122,26 +128,27 @@ data class BackupImportPlan(
     val keyActions: List<KeyImportAction>,
     val hostActions: List<HostImportAction>,
 ) {
-    val keyInsertCount: Int get() = keyActions.count { it is KeyImportAction.Insert }
-    val keyReuseCount: Int get() = keyActions.count { it is KeyImportAction.Reuse }
-    val renamedKeyCount: Int get() = keyActions.count { it is KeyImportAction.Insert && it.renamed }
-    val renamedHostCount: Int get() = hostActions.count { it.renamed }
+    val keyInsertCount: Int
+        get() = keyActions.count { it is KeyImportAction.Insert }
+
+    val keyReuseCount: Int
+        get() = keyActions.count { it is KeyImportAction.Reuse }
+
+    val renamedKeyCount: Int
+        get() = keyActions.count { it is KeyImportAction.Insert && it.renamed }
+
+    val renamedHostCount: Int
+        get() = hostActions.count { it.renamed }
 }
 
 sealed interface KeyImportAction {
     val exportedId: Long
 
-    data class Reuse(
-        override val exportedId: Long,
-        val localId: Long,
-        val name: String,
-    ) : KeyImportAction
+    data class Reuse(override val exportedId: Long, val localId: Long, val name: String) :
+        KeyImportAction
 
-    data class Insert(
-        override val exportedId: Long,
-        val key: SshKey,
-        val renamed: Boolean,
-    ) : KeyImportAction
+    data class Insert(override val exportedId: Long, val key: SshKey, val renamed: Boolean) :
+        KeyImportAction
 }
 
 data class HostImportAction(
@@ -153,5 +160,6 @@ data class HostImportAction(
 
 private sealed interface KeyReference {
     data class Existing(val localId: Long) : KeyReference
+
     data class Insert(val actionIndex: Int) : KeyReference
 }

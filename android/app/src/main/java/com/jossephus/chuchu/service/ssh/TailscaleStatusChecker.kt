@@ -3,17 +3,28 @@ package com.jossephus.chuchu.service.ssh
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import java.net.NetworkInterface
+import java.net.Inet4Address
+import java.net.Inet6Address
 import java.net.InetAddress
+import java.net.NetworkInterface
 
-class TailscaleStatusChecker(
-    private val context: Context,
-) {
+/**
+ * Detects whether this device is currently attached to a Tailscale tailnet.
+ *
+ * [isActive] performs blocking network-interface enumeration and MUST NOT be called on the main
+ * thread; run it from `Dispatchers.IO` (or an equivalent background dispatcher) and publish the
+ * result back to the UI thread.
+ */
+class TailscaleStatusChecker(private val context: Context) {
     /**
      * Returns true if the device appears to be on a Tailscale network.
-     * We check for a Tailscale IP (100.64.0.0/10) via network interfaces first.
-     * If that fails (not all Android devices expose the tun interface to Java APIs),
-     * we fall back to checking if any VPN transport is active.
+     *
+     * We check for a tailnet address via network interfaces first, IPv4 `100.64.0.0/10` and IPv6
+     * `fd7a:115c:a1e0::/48`. If that fails (not all Android devices expose the tun interface to
+     * Java APIs), we fall back to checking if any VPN transport is active.
+     *
+     * This call enumerates every [NetworkInterface] and therefore blocks; see the class
+     * documentation for the dispatcher requirement.
      */
     fun isActive(): Boolean {
         if (hasTailnetAddress()) return true
@@ -32,19 +43,45 @@ class TailscaleStatusChecker(
             NetworkInterface.getNetworkInterfaces()
                 ?.toList()
                 ?.flatMap { it.inetAddresses?.toList() ?: emptyList() }
-                ?.any { addr -> isTailnetIp(addr) }
-                ?: false
+                ?.any { addr -> isTailnetIp(addr) } ?: false
         } catch (_: Exception) {
             false
         }
     }
 
     private fun isTailnetIp(addr: InetAddress): Boolean {
-        if (addr.isLoopbackAddress || !addr.hostAddress.startsWith("100.")) return false
-        val octets = addr.hostAddress.split(".")
-        if (octets.size != 4) return false
-        val second = octets.getOrNull(1)?.toIntOrNull() ?: return false
-        // 100.64.0.0/10 means second octet must be in [64, 127]
-        return second in 64..127
+        if (addr.isLoopbackAddress || addr.isAnyLocalAddress) return false
+        val bytes = addr.address
+        return when (addr) {
+            is Inet4Address -> isTailnetIpv4(bytes)
+            is Inet6Address -> isTailnetIpv6(bytes)
+            else -> false
+        }
+    }
+
+    /** `100.64.0.0/10`: first octet 100, second octet in [64, 127]. */
+    private fun isTailnetIpv4(bytes: ByteArray): Boolean {
+        if (bytes.size != 4) return false
+        val first = bytes[0].toInt() and 0xff
+        val second = bytes[1].toInt() and 0xff
+        return first == 100 && second in 64..127
+    }
+
+    /**
+     * `fd7a:115c:a1e0::/48`: the first six bytes must equal `fd 7a 11 5c a1 e0`. IPv6 addresses
+     * reported by Java may be IPv4-mapped, which cannot match the fixed prefix and therefore falls
+     * through to false.
+     */
+    private fun isTailnetIpv6(bytes: ByteArray): Boolean {
+        if (bytes.size != 16) return false
+        for (index in TailnetIpv6Prefix.indices) {
+            if (bytes[index] != TailnetIpv6Prefix[index]) return false
+        }
+        return true
+    }
+
+    private companion object {
+        val TailnetIpv6Prefix =
+            byteArrayOf(0xfd.toByte(), 0x7a, 0x11, 0x5c, 0xa1.toByte(), 0xe0.toByte())
     }
 }

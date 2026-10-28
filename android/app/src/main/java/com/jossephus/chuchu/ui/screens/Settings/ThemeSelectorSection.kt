@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -51,6 +52,8 @@ import com.jossephus.chuchu.ui.theme.ChuTypography
 import com.jossephus.chuchu.ui.theme.GhosttyTheme
 import com.jossephus.chuchu.ui.theme.GhosttyThemeRegistry
 import com.jossephus.chuchu.ui.theme.ThemeMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun ThemeSelectorSection(
@@ -63,11 +66,19 @@ internal fun ThemeSelectorSection(
 ) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
-    val context = LocalContext.current
-    val availableThemes = remember { GhosttyThemeRegistry.availableThemeNames }
-    val themeByName = remember(context, availableThemes) {
-        availableThemes.associateWith { themeName -> GhosttyThemeRegistry.getTheme(context, themeName) }
-    }
+    val appContext = LocalContext.current.applicationContext
+    // Parsing all 463 theme assets is expensive; keep it off the main thread and
+    // show a placeholder until the map is ready.
+    val themeByName by
+        produceState<Map<String, GhosttyTheme?>?>(initialValue = null, appContext) {
+            value =
+                withContext(Dispatchers.IO) {
+                    GhosttyThemeRegistry.init(appContext)
+                    GhosttyThemeRegistry.availableThemeNames.associateWith { themeName ->
+                        GhosttyThemeRegistry.getTheme(appContext, themeName)
+                    }
+                }
+        }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         ChuText("── ", style = typography.labelSmall, color = colors.textMuted)
@@ -80,59 +91,59 @@ internal fun ThemeSelectorSection(
     ThemeModePills(themeMode = themeMode, onThemeModeChanged = onThemeModeChanged)
     Spacer(modifier = Modifier.height(16.dp))
 
-    when (themeMode) {
-        ThemeMode.Dark -> SingleThemePicker(
-            currentTheme = darkThemeName,
-            onThemeSelected = onDarkThemeSelected,
-            themeByName = themeByName,
-        )
-        ThemeMode.Light -> SingleThemePicker(
-            currentTheme = lightThemeName,
-            onThemeSelected = onLightThemeSelected,
-            themeByName = themeByName,
-        )
-        ThemeMode.System -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChuText("dark", style = typography.labelSmall, color = colors.textMuted)
-            SingleThemePicker(
-                currentTheme = darkThemeName,
-                onThemeSelected = onDarkThemeSelected,
-                themeByName = themeByName,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            ChuText("light", style = typography.labelSmall, color = colors.textMuted)
-            SingleThemePicker(
-                currentTheme = lightThemeName,
-                onThemeSelected = onLightThemeSelected,
-                themeByName = themeByName,
-            )
+    val loadedThemes = themeByName
+    if (loadedThemes == null) {
+        ChuText("loading themes…", style = typography.labelSmall, color = colors.textMuted)
+    } else {
+        when (themeMode) {
+            ThemeMode.Dark ->
+                SingleThemePicker(
+                    currentTheme = darkThemeName,
+                    onThemeSelected = onDarkThemeSelected,
+                    themeByName = loadedThemes,
+                )
+            ThemeMode.Light ->
+                SingleThemePicker(
+                    currentTheme = lightThemeName,
+                    onThemeSelected = onLightThemeSelected,
+                    themeByName = loadedThemes,
+                )
+            ThemeMode.System ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChuText("dark", style = typography.labelSmall, color = colors.textMuted)
+                    SingleThemePicker(
+                        currentTheme = darkThemeName,
+                        onThemeSelected = onDarkThemeSelected,
+                        themeByName = loadedThemes,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ChuText("light", style = typography.labelSmall, color = colors.textMuted)
+                    SingleThemePicker(
+                        currentTheme = lightThemeName,
+                        onThemeSelected = onLightThemeSelected,
+                        themeByName = loadedThemes,
+                    )
+                }
         }
     }
 }
 
 @Composable
-private fun ThemeModePills(
-    themeMode: ThemeMode,
-    onThemeModeChanged: (ThemeMode) -> Unit,
-) {
+private fun ThemeModePills(themeMode: ThemeMode, onThemeModeChanged: (ThemeMode) -> Unit) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.surface),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(colors.surface)
     ) {
         ThemeMode.entries.forEach { mode ->
             val isSelected = mode == themeMode
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(
-                        color = if (isSelected) colors.accent else Color.Transparent,
-                    )
-                    .clickable { onThemeModeChanged(mode) }
-                    .padding(vertical = 10.dp),
+                modifier =
+                    Modifier.weight(1f)
+                        .background(color = if (isSelected) colors.accent else Color.Transparent)
+                        .clickable { onThemeModeChanged(mode) }
+                        .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 ChuText(
@@ -155,10 +166,12 @@ private fun SingleThemePicker(
     val typography = ChuTypography.current
     var themeQuery by rememberSaveable { mutableStateOf("") }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val filteredThemes = remember(themeByName.keys, themeQuery) {
-        val query = themeQuery.trim()
-        if (query.isEmpty()) themeByName.keys.toList() else themeByName.keys.filter { it.contains(query, ignoreCase = true) }
-    }
+    val filteredThemes =
+        remember(themeByName.keys, themeQuery) {
+            val query = themeQuery.trim()
+            if (query.isEmpty()) themeByName.keys.toList()
+            else themeByName.keys.filter { it.contains(query, ignoreCase = true) }
+        }
     var showPreview by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
@@ -194,7 +207,8 @@ private fun SingleThemePicker(
             }
         }
 
-        if (showPreview && previewTheme != null) ThemePreview(theme = previewTheme, name = currentTheme)
+        if (showPreview && previewTheme != null)
+            ThemePreview(theme = previewTheme, name = currentTheme)
 
         ThemePickerButton(
             currentTheme = currentTheme,
@@ -202,7 +216,11 @@ private fun SingleThemePicker(
             onToggle = { expanded = !expanded },
         )
 
-        AnimatedVisibility(visible = expanded, enter = expandVertically(), exit = shrinkVertically()) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+        ) {
             ThemePickerDropdown(
                 query = themeQuery,
                 onQueryChange = { themeQuery = it },
@@ -219,11 +237,7 @@ private fun SingleThemePicker(
 // ─── Shared widgets ─────────────────────────────────────────────────────────
 
 @Composable
-private fun ThemePickerButton(
-    currentTheme: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
+private fun ThemePickerButton(currentTheme: String, expanded: Boolean, onToggle: () -> Unit) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
     ChuButton(
@@ -237,7 +251,11 @@ private fun ThemePickerButton(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ChuText(currentTheme, style = typography.label)
-            ChuText(if (expanded) "▲" else "▼", style = typography.labelSmall, color = colors.textMuted)
+            ChuText(
+                if (expanded) "▲" else "▼",
+                style = typography.labelSmall,
+                color = colors.textMuted,
+            )
         }
     }
 }
@@ -295,7 +313,7 @@ private fun ThemePickerRow(
             Modifier.fillMaxWidth()
                 .background(if (isSelected) colors.surface else colors.surfaceVariant)
                 .clickable(onClick = onThemeSelected)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -327,18 +345,20 @@ private fun ThemePreview(theme: GhosttyTheme, name: String) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
 
-    Column(
-        modifier = Modifier.fillMaxWidth().background(colors.surface).padding(1.dp),
-    ) {
+    Column(modifier = Modifier.fillMaxWidth().background(colors.surface).padding(1.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .background(colors.surface)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.width(6.dp).height(6.dp).background(colors.accent),
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.width(6.dp).height(6.dp).background(colors.accent))
                 ChuText("preview", style = typography.labelSmall, color = colors.textSecondary)
             }
             ChuText(name, style = typography.labelSmall, color = colors.textMuted)
@@ -377,7 +397,11 @@ private fun ThemePreviewBody(theme: GhosttyTheme) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ChuText("→ ", style = mono, color = theme.palette[2])
             ChuText("bat ", style = mono, color = theme.palette[4])
-            ChuText("main.zig", style = mono.copy(textDecoration = TextDecoration.Underline), color = theme.palette[6])
+            ChuText(
+                "main.zig",
+                style = mono.copy(textDecoration = TextDecoration.Underline),
+                color = theme.palette[6],
+            )
         }
         BatPreview(theme = theme, style = mono)
 
@@ -385,7 +409,10 @@ private fun ThemePreviewBody(theme: GhosttyTheme) {
             ChuText("$ ", style = mono, color = theme.foreground)
             Box(modifier = Modifier.height(10.dp).width(5.dp).background(theme.cursorColor))
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             theme.palette.forEach { paletteColor ->
                 Box(modifier = Modifier.weight(1f).height(10.dp).background(paletteColor))
             }
@@ -398,23 +425,34 @@ private fun BatPreview(theme: GhosttyTheme, style: TextStyle) {
     val chromeColor = theme.palette[8]
     val rule = "─".repeat(40)
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
         BasicText(text = "───────┬$rule", style = style.copy(color = chromeColor))
         BasicText(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(color = chromeColor)) { append("       │ ") }
-                withStyle(SpanStyle(color = theme.foreground)) { append("File: ") }
-                withStyle(SpanStyle(color = theme.foreground, fontWeight = FontWeight.Bold)) { append("main.zig") }
-            },
+            text =
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = chromeColor)) { append("       │ ") }
+                    withStyle(SpanStyle(color = theme.foreground)) { append("File: ") }
+                    withStyle(SpanStyle(color = theme.foreground, fontWeight = FontWeight.Bold)) {
+                        append("main.zig")
+                    }
+                },
             style = style,
         )
         BasicText(text = "───────┼$rule", style = style.copy(color = chromeColor))
         ZigPreviewLines.forEach { (lineNo, segments) ->
             BasicText(
-                text = buildAnnotatedString {
-                    withStyle(SpanStyle(color = chromeColor)) { append(String.format("%4d   │ ", lineNo)) }
-                    segments.forEach { seg -> withStyle(SpanStyle(color = seg.role.color(theme))) { append(seg.text) } }
-                },
+                text =
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = chromeColor)) {
+                            append(String.format("%4d   │ ", lineNo))
+                        }
+                        segments.forEach { seg ->
+                            withStyle(SpanStyle(color = seg.role.color(theme))) { append(seg.text) }
+                        }
+                    },
                 style = style,
             )
         }
@@ -422,36 +460,60 @@ private fun BatPreview(theme: GhosttyTheme, style: TextStyle) {
     }
 }
 
-private enum class TokenRole { Standard, Keyword, Type, String, Number, Function;
-    fun color(theme: GhosttyTheme): Color = when (this) {
-        Standard -> theme.foreground
-        Keyword -> theme.palette[5]
-        Type -> theme.palette[12]
-        String -> theme.palette[10]
-        Number -> theme.palette[4]
-        Function -> theme.palette[2]
-    }
+private enum class TokenRole {
+    Standard,
+    Keyword,
+    Type,
+    String,
+    Number,
+    Function;
+
+    fun color(theme: GhosttyTheme): Color =
+        when (this) {
+            Standard -> theme.foreground
+            Keyword -> theme.palette[5]
+            Type -> theme.palette[12]
+            String -> theme.palette[10]
+            Number -> theme.palette[4]
+            Function -> theme.palette[2]
+        }
 }
 
 private data class Seg(val text: String, val role: TokenRole)
 
 private fun s(text: String) = Seg(text, TokenRole.Standard)
+
 private fun k(text: String) = Seg(text, TokenRole.Keyword)
+
 private fun t(text: String) = Seg(text, TokenRole.Type)
+
 private fun str(text: String) = Seg(text, TokenRole.String)
+
 private fun n(text: String) = Seg(text, TokenRole.Number)
+
 private fun fn(text: String) = Seg(text, TokenRole.Function)
 
-private val ZigPreviewLines: List<Pair<Int, List<Seg>>> = listOf(
-    1 to listOf(k("const"), s(" std "), k("= @import"), s("("), str("\"std\""), s(");")),
-    2 to emptyList(),
-    3 to listOf(k("pub "), t("fn "), fn("main"), s("(n: "), t("u32"), s(") "), t("void"), s(" {")),
-    4 to listOf(k("    var "), s("i: "), t("u32"), s(" = "), n("0"), s(";")),
-    5 to listOf(k("    while "), s("(i < n) : (i "), k("+= "), n("1"), s(") {")),
-    6 to listOf(s("        std.debug.print("), str("\"zig"), t("\\n"), str("\""), s(", .{});")),
-    7 to listOf(s("    }")),
-    8 to listOf(s("}")),
-)
+private val ZigPreviewLines: List<Pair<Int, List<Seg>>> =
+    listOf(
+        1 to listOf(k("const"), s(" std "), k("= @import"), s("("), str("\"std\""), s(");")),
+        2 to emptyList(),
+        3 to
+            listOf(
+                k("pub "),
+                t("fn "),
+                fn("main"),
+                s("(n: "),
+                t("u32"),
+                s(") "),
+                t("void"),
+                s(" {"),
+            ),
+        4 to listOf(k("    var "), s("i: "), t("u32"), s(" = "), n("0"), s(";")),
+        5 to listOf(k("    while "), s("(i < n) : (i "), k("+= "), n("1"), s(") {")),
+        6 to listOf(s("        std.debug.print("), str("\"zig"), t("\\n"), str("\""), s(", .{});")),
+        7 to listOf(s("    }")),
+        8 to listOf(s("}")),
+    )
 
 private val SwatchIndices = intArrayOf(1, 2, 3, 4, 5, 6)
 

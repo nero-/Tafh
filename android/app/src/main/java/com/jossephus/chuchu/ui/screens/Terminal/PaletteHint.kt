@@ -13,9 +13,7 @@ import com.jossephus.chuchu.ui.components.ChuText
 import com.jossephus.chuchu.ui.theme.ChuColors
 import com.jossephus.chuchu.ui.theme.ChuTypography
 
-/**
- * Hint chip showing a key binding and its action, used in overlay bottom bars.
- */
+/** Hint chip showing a key binding and its action, used in overlay bottom bars. */
 @Composable
 fun PaletteHint(key: String, label: String) {
     val colors = ChuColors.current
@@ -25,9 +23,8 @@ fun PaletteHint(key: String, label: String) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Box(
-            modifier = Modifier
-                .border(1.dp, colors.border)
-                .padding(horizontal = 5.dp, vertical = 1.dp),
+            modifier =
+                Modifier.border(1.dp, colors.border).padding(horizontal = 5.dp, vertical = 1.dp)
         ) {
             ChuText(key, style = typography.labelSmall, color = colors.textSecondary)
         }

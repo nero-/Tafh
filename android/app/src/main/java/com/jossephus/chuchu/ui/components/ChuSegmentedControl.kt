@@ -20,10 +20,7 @@ fun <T> ChuSegmentedControl(
 ) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { option ->
             val isSelected = option == selected
             val isDisabled = option in disabledOptions
@@ -39,11 +36,12 @@ fun <T> ChuSegmentedControl(
                 ChuText(
                     text = label,
                     style = typography.label,
-                    color = when {
-                        isDisabled -> colors.textMuted
-                        isSelected -> colors.accent
-                        else -> colors.textSecondary
-                    },
+                    color =
+                        when {
+                            isDisabled -> colors.textMuted
+                            isSelected -> colors.accent
+                            else -> colors.textSecondary
+                        },
                 )
             }
         }

@@ -4,10 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-data class ChuchuHint(
-    val key: String,
-    val description: String,
-)
+data class ChuchuHint(val key: String, val description: String)
 
 class ChuchuKeyBindings(
     private val hints: List<ChuchuHint>,
@@ -36,19 +33,18 @@ class ChuchuKeyBindings(
 
     companion object {
         /**
-         * Merge builtin-command shortcuts and per-custom-action shortcuts into a single
-         * set of hints and key handlers.
+         * Merge builtin-command shortcuts and per-custom-action shortcuts into a single set of
+         * hints and key handlers.
          *
-         * Builtin commands are processed first, in [BuiltinCommand] enum order, so their
-         * ordering is deterministic and they take priority over custom actions bound to
-         * the same key. The first binding for a key wins (settings already prevents
-         * builtin duplicates). Custom actions that collide with a builtin key are
-         * dropped. When several custom actions share one key, the handler defers to
-         * [onSelectAmongActions] instead of dispatching directly.
+         * Builtin commands are processed first, in [BuiltinCommand] enum order, so their ordering
+         * is deterministic and they take priority over custom actions bound to the same key. The
+         * first binding for a key wins (settings already prevents builtin duplicates). Custom
+         * actions that collide with a builtin key are dropped. When several custom actions share
+         * one key, the handler defers to [onSelectAmongActions] instead of dispatching directly.
          *
-         * The actual side effects live in the caller-supplied lambdas
-         * ([builtinCommandHandlers], [onDispatchAction], [onSelectAmongActions]) so this
-         * factory stays free of terminal/view-model state.
+         * The actual side effects live in the caller-supplied lambdas ([builtinCommandHandlers],
+         * [onDispatchAction], [onSelectAmongActions]) so this factory stays free of
+         * terminal/view-model state.
          */
         fun build(
             builtinShortcuts: Map<String, String>,
@@ -60,8 +56,8 @@ class ChuchuKeyBindings(
             val builtinHints = mutableListOf<ChuchuHint>()
             val builtinHandlers = mutableMapOf<Char, () -> Unit>()
             BuiltinCommand.entries.forEach { command ->
-                val shortcut = builtinShortcuts[command.id]?.takeIf { it.isNotEmpty() }
-                    ?: return@forEach
+                val shortcut =
+                    builtinShortcuts[command.id]?.takeIf { it.isNotEmpty() } ?: return@forEach
                 val handler = builtinCommandHandlers[command] ?: return@forEach
                 val keyChar = shortcut.first().lowercaseChar()
                 if (keyChar in builtinHandlers) return@forEach
@@ -84,10 +80,11 @@ class ChuchuKeyBindings(
             }
             shortcutActionsMap.forEach { (keyChar, actions) ->
                 if (!seenShortcuts.add(keyChar)) return@forEach
-                customHints += ChuchuHint(
-                    key = keyChar.toString(),
-                    description = "[${actions.joinToString(", ") { it.label }}]",
-                )
+                customHints +=
+                    ChuchuHint(
+                        key = keyChar.toString(),
+                        description = "[${actions.joinToString(", ") { it.label }}]",
+                    )
                 customHandlers[keyChar] = {
                     if (actions.size == 1) {
                         onDispatchAction(actions.first())

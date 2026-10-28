@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -36,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,10 +42,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -55,11 +53,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jossephus.chuchu.service.multiplexer.RemoteMultiplexerSession
 import com.jossephus.chuchu.service.terminal.SessionStatus
-import com.jossephus.chuchu.service.terminal.SessionState
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import com.jossephus.chuchu.service.terminal.TabSession
 import com.jossephus.chuchu.ui.components.ChuButton
 import com.jossephus.chuchu.ui.components.ChuButtonVariant
@@ -67,19 +63,16 @@ import com.jossephus.chuchu.ui.components.ChuText
 import com.jossephus.chuchu.ui.theme.ChuColorPalette
 import com.jossephus.chuchu.ui.theme.ChuColors
 import com.jossephus.chuchu.ui.theme.ChuTypography
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
-private data class TabRowState(
-    val status: SessionStatus,
-    val title: String?,
-    val pwd: String?,
-)
+private data class TabRowState(val status: SessionStatus, val title: String?, val pwd: String?)
 
 /**
  * Global expanded tab manager for strip mode.
  *
- * Full-screen overlay listing all active sessions with host/profile name,
- * status, optional terminal title, user@host, PWD.  Each row exposes
- * labeled duplicate and close actions.
+ * Full-screen overlay listing all active sessions with host/profile name, status, optional terminal
+ * title, user@host, PWD. Each row exposes labeled duplicate and close actions.
  */
 @Composable
 fun TerminalTabManager(
@@ -114,9 +107,7 @@ fun TerminalTabManager(
 
     BackHandler(enabled = visible) { onDismiss() }
 
-    LaunchedEffect(entries.size) {
-        onFocusedTabIndexChange(focusedTabIndex.coerceIn(0, maxIndex))
-    }
+    LaunchedEffect(entries.size) { onFocusedTabIndexChange(focusedTabIndex.coerceIn(0, maxIndex)) }
 
     LaunchedEffect(activeTabId, entries) {
         val activeIndex = entries.indexOfFirst { it.id == activeTabId }
@@ -140,57 +131,63 @@ fun TerminalTabManager(
 
     AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.background)
-                .semantics { contentDescription = "close tab manager" }
-                .clickable(onClick = onDismiss)
-                .focusRequester(focusRequester)
-                .focusable()
-                .onPreviewKeyEvent { event ->
-                    when (event.key) {
-                        Key.Escape -> {
-                            if (event.type == KeyEventType.KeyUp) { onDismiss() }; true
+            modifier =
+                Modifier.fillMaxSize()
+                    .background(colors.background)
+                    .semantics { contentDescription = "close tab manager" }
+                    .clickable(onClick = onDismiss)
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onPreviewKeyEvent { event ->
+                        when (event.key) {
+                            Key.Escape -> {
+                                if (event.type == KeyEventType.KeyUp) {
+                                    onDismiss()
+                                }
+                                true
+                            }
+                            Key.Enter -> {
+                                if (event.type == KeyEventType.KeyUp) {
+                                    entries.getOrNull(focusedTabIndex)?.let { onSelectTab(it.id) }
+                                    onDismiss()
+                                }
+                                true
+                            }
+                            Key.DirectionUp,
+                            Key.PageUp -> {
+                                if (event.type == KeyEventType.KeyUp && entries.isNotEmpty()) {
+                                    onFocusedTabIndexChange((focusedTabIndex - 1).mod(entries.size))
+                                }
+                                true
+                            }
+                            Key.DirectionDown,
+                            Key.PageDown -> {
+                                if (event.type == KeyEventType.KeyUp && entries.isNotEmpty()) {
+                                    onFocusedTabIndexChange((focusedTabIndex + 1).mod(entries.size))
+                                }
+                                true
+                            }
+                            else -> false
                         }
-                        Key.Enter -> {
-                            if (event.type == KeyEventType.KeyUp) {
-                                entries.getOrNull(focusedTabIndex)?.let { onSelectTab(it.id) }
-                                onDismiss()
-                            }; true
-                        }
-                        Key.DirectionUp, Key.PageUp -> {
-                            if (event.type == KeyEventType.KeyUp && entries.isNotEmpty()) {
-                                onFocusedTabIndexChange((focusedTabIndex - 1).mod(entries.size))
-                            }; true
-                        }
-                        Key.DirectionDown, Key.PageDown -> {
-                            if (event.type == KeyEventType.KeyUp && entries.isNotEmpty()) {
-                                onFocusedTabIndexChange((focusedTabIndex + 1).mod(entries.size))
-                            }; true
-                        }
-                        else -> false
                     }
-                },
         ) {
             Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(top = 56.dp, start = 16.dp, end = 16.dp)
-                    .fillMaxWidth()
-                    .background(colors.surface)
-                    .border(1.dp, colors.border.copy(alpha = 0.65f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    ),
+                modifier =
+                    Modifier.align(Alignment.TopCenter)
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(top = 56.dp, start = 16.dp, end = 16.dp)
+                        .fillMaxWidth()
+                        .background(colors.surface)
+                        .border(1.dp, colors.border.copy(alpha = 0.65f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
             ) {
                 // Header
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
                     ChuText(
                         "tabs",
@@ -216,35 +213,38 @@ fun TerminalTabManager(
                             val isFocused = idx == focusedTabIndex
                             val label = terminalTabDisplayLabel(tab)
                             val userHost = terminalTabEndpointLabel(tab)
-                            val rowState by remember(tab) {
-                                tab.sessionState
-                                    .map { TabRowState(it.status, it.title, it.pwd) }
-                                    .distinctUntilChanged()
-                            }.collectAsStateWithLifecycle(
-                                initialValue = TabRowState(SessionStatus.Disconnected, null, null)
-                            )
+                            val rowState by
+                                remember(tab) {
+                                        tab.sessionState
+                                            .map { TabRowState(it.status, it.title, it.pwd) }
+                                            .distinctUntilChanged()
+                                    }
+                                    .collectAsStateWithLifecycle(
+                                        initialValue =
+                                            TabRowState(SessionStatus.Disconnected, null, null)
+                                    )
                             val status = rowState.status
                             val title = rowState.title?.takeIf { it.isNotBlank() }
                             val workingDirectory = rowState.pwd?.takeIf { it.isNotBlank() }
                             val statusText = statusLabel(status)
 
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        if (isFocused) colors.surface
-                                        else Color.Transparent
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isFocused) colors.accent.copy(alpha = 0.7f)
-                                        else colors.border.copy(alpha = 0.35f),
-                                    )
-                                    .semantics {
-                                        contentDescription = "$statusText — $label, ${if (isActive) "active" else "inactive"}"
-                                    }
-                                    .clickable { onSelectTab(tab.id) }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                                        .background(
+                                            if (isFocused) colors.surface else Color.Transparent
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (isFocused) colors.accent.copy(alpha = 0.7f)
+                                            else colors.border.copy(alpha = 0.35f),
+                                        )
+                                        .semantics {
+                                            contentDescription =
+                                                "$statusText — $label, ${if (isActive) "active" else "inactive"}"
+                                        }
+                                        .clickable { onSelectTab(tab.id) }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
@@ -261,10 +261,10 @@ fun TerminalTabManager(
 
                                 // Status dot
                                 Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(statusDotColor(status, colors)),
+                                    modifier =
+                                        Modifier.size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(statusDotColor(status, colors))
                                 )
 
                                 // Tab info column
@@ -277,8 +277,9 @@ fun TerminalTabManager(
                                         ChuText(
                                             displayLabel,
                                             style = typography.body,
-                                            color = if (isFocused) colors.accent
-                                            else colors.textPrimary,
+                                            color =
+                                                if (isFocused) colors.accent
+                                                else colors.textPrimary,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                         )
@@ -298,9 +299,7 @@ fun TerminalTabManager(
                                             color = colors.textSecondary,
                                         )
                                     }
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         ChuText(
                                             userHost,
                                             style = typography.labelSmall,
@@ -317,21 +316,21 @@ fun TerminalTabManager(
                                 }
 
                                 // Actions
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     ChuButton(
                                         onClick = {
                                             onDuplicateTab(tab.id)
                                             onDismiss()
                                         },
-                                        modifier = Modifier.defaultMinSize(minHeight = 48.dp, minWidth = 48.dp),
+                                        modifier =
+                                            Modifier.defaultMinSize(
+                                                minHeight = 48.dp,
+                                                minWidth = 48.dp,
+                                            ),
                                         variant = ChuButtonVariant.Ghost,
                                         bracketed = true,
-                                        contentPadding = PaddingValues(
-                                            horizontal = 8.dp,
-                                            vertical = 4.dp,
-                                        ),
+                                        contentPadding =
+                                            PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                         contentDescription = "duplicate ${label}",
                                     ) {
                                         ChuText(
@@ -342,13 +341,15 @@ fun TerminalTabManager(
                                     }
                                     ChuButton(
                                         onClick = { onCloseTab(tab.id) },
-                                        modifier = Modifier.defaultMinSize(minHeight = 48.dp, minWidth = 48.dp),
+                                        modifier =
+                                            Modifier.defaultMinSize(
+                                                minHeight = 48.dp,
+                                                minWidth = 48.dp,
+                                            ),
                                         variant = ChuButtonVariant.Ghost,
                                         bracketed = true,
-                                        contentPadding = PaddingValues(
-                                            horizontal = 8.dp,
-                                            vertical = 4.dp,
-                                        ),
+                                        contentPadding =
+                                            PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                         contentDescription = "close ${label}",
                                     ) {
                                         ChuText(
@@ -363,16 +364,10 @@ fun TerminalTabManager(
                     }
 
                     // Bottom bar
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(colors.border),
-                    )
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.border))
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier =
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
@@ -395,9 +390,7 @@ fun TerminalTabManager(
                 } else {
                     // Empty state inside the manager
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -412,7 +405,8 @@ fun TerminalTabManager(
                                     onAddTab()
                                     onDismiss()
                                 },
-                                modifier = Modifier.defaultMinSize(minHeight = 48.dp, minWidth = 48.dp),
+                                modifier =
+                                    Modifier.defaultMinSize(minHeight = 48.dp, minWidth = 48.dp),
                                 variant = ChuButtonVariant.Outlined,
                                 bracketed = true,
                             ) {
@@ -444,13 +438,12 @@ fun TerminalTabManager(
     }
 }
 
-/**
- * Status dot color matching the one used in [TerminalTabStrip].
- */
-private fun statusDotColor(status: SessionStatus, colors: ChuColorPalette): Color = when (status) {
-    SessionStatus.Connected -> colors.success
-    SessionStatus.Connecting,
-    SessionStatus.Reconnecting -> colors.accent
-    SessionStatus.Disconnected,
-    SessionStatus.Error -> colors.error
-}
+/** Status dot color matching the one used in [TerminalTabStrip]. */
+private fun statusDotColor(status: SessionStatus, colors: ChuColorPalette): Color =
+    when (status) {
+        SessionStatus.Connected -> colors.success
+        SessionStatus.Connecting,
+        SessionStatus.Reconnecting -> colors.accent
+        SessionStatus.Disconnected,
+        SessionStatus.Error -> colors.error
+    }

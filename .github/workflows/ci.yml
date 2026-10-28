@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android-unit-tests:
+    name: Android unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4.4.4
+
+      # Unit tests run on the JVM and never load libchuchu_jni.so, so this job
+      # deliberately skips NDK/native setup.
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+  native-tests:
+    name: Native (Zig) tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Zig 0.15.2
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      # The bridge tests are plain Zig (no jni.h, no Android SDK/NDK).
+      - name: Run Zig tests
+        working-directory: zig-src
+        run: zig build test --summary all
+
+  rust-tests:
+    name: Rust (backup crypto) tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # chuchu-backup is pure Rust: the CHBK container plus its JNI entry points
+      # are exercised on the host, including the cross-language fixtures captured
+      # from the retired Zig implementation.
+      - name: Run cargo tests
+        working-directory: rust
+        run: cargo test --locked --all-targets
+
+  format:
+    name: Format checks
+    runs-on: ubuntu-latest
+    env:
+      KTFMT_VERSION: "0.54"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Zig 0.15.2
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      # ktlint ships as a JVM launcher; the runner's default JDK works but pin it.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # ktfmt is the project's declared formatter (Makefile `fmt`, and
+      # android/.editorconfig delegates wrapping/line length to it). ktlint's
+      # formatter disagrees with ktfmt on multiline-if-else, annotation
+      # newlines and expression bodies, so gating on both would gate on a
+      # contradiction. `make lint` stays available but is advisory.
+      - name: Install ktfmt
+        run: |
+          set -euo pipefail
+          curl -sSL -o /tmp/ktfmt.jar \
+            "https://github.com/facebook/ktfmt/releases/download/${KTFMT_VERSION}/ktfmt-${KTFMT_VERSION}-jar-with-dependencies.jar"
+
+      - name: Check Kotlin formatting
+        run: make fmt-check KTFMT="java -jar /tmp/ktfmt.jar"
+
+      - name: Check Zig formatting
+        run: make native-fmt-check

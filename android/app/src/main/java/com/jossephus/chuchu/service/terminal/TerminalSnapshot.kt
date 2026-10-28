@@ -35,32 +35,32 @@ data class TerminalSnapshot(
     val bgArgb: IntArray,
     val flags: ByteArray,
     /**
-     * Sparse map: cell index -> extra grapheme codepoints (appended after the
-     * base codepoint stored in [codepoints]). Present when the corresponding
-     * cell has [CELL_FLAG_HAS_GRAPHEME] set.
+     * Sparse map: cell index -> extra grapheme codepoints (appended after the base codepoint stored
+     * in [codepoints]). Present when the corresponding cell has [CELL_FLAG_HAS_GRAPHEME] set.
      */
     val graphemeExtras: Map<Int, IntArray> = emptyMap(),
     val images: List<ImagePlacement> = emptyList(),
     /**
-     * Stable screen.y of the content currently at viewport row 0. Changes
-     * monotonically as the viewport scrolls, so the host can subtract it
-     * across snapshots to remap a content-tracking selection anchor.
+     * Stable screen.y of the content currently at viewport row 0. Changes monotonically as the
+     * viewport scrolls, so the host can subtract it across snapshots to remap a content-tracking
+     * selection anchor.
      */
     val viewportScrollY: Int = 0,
     /**
-     * True when the running app has enabled a drag-reporting mouse mode
-     * (DECSET 1002/1003). When set, the host forwards long-press drag
-     * gestures to the app so a multiplexer (tmux/zellij/...) can perform
-     * its own pane-scoped selection in copy mode instead of the host
-     * building a grid-wide client-side selection that crosses pane borders.
+     * True when the running app has enabled a drag-reporting mouse mode (DECSET 1002/1003). When
+     * set, the host forwards long-press drag gestures to the app so a multiplexer (tmux/zellij/...)
+     * can perform its own pane-scoped selection in copy mode instead of the host building a
+     * grid-wide client-side selection that crosses pane borders.
      */
     val appHandlesSelectionDrag: Boolean = false,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is TerminalSnapshot) return false
-        return cols == other.cols && rows == other.rows &&
-            cursorX == other.cursorX && cursorY == other.cursorY &&
+        return cols == other.cols &&
+            rows == other.rows &&
+            cursorX == other.cursorX &&
+            cursorY == other.cursorY &&
             cursorVisible == other.cursorVisible &&
             cursorStyle == other.cursorStyle &&
             defaultBgArgb == other.defaultBgArgb &&
@@ -88,9 +88,11 @@ data class TerminalSnapshot(
         result = 31 * result + fgArgb.contentHashCode()
         result = 31 * result + bgArgb.contentHashCode()
         result = 31 * result + flags.contentHashCode()
-        result = 31 * result + graphemeExtras.entries.fold(0) { acc, (key, arr) ->
-            acc + key + arr.contentHashCode()
-        }
+        result =
+            31 * result +
+                graphemeExtras.entries.fold(0) { acc, (key, arr) ->
+                    acc + key + arr.contentHashCode()
+                }
         result = 31 * result + images.hashCode()
         result = 31 * result + viewportScrollY
         result = 31 * result + appHandlesSelectionDrag.hashCode()
@@ -114,10 +116,7 @@ data class TerminalSnapshot(
         private const val CELL_SIZE_BYTES = 11
         private const val IMAGE_HEADER_BYTES = 52
 
-        private fun graphemeExtrasEquals(
-            a: Map<Int, IntArray>,
-            b: Map<Int, IntArray>,
-        ): Boolean {
+        private fun graphemeExtrasEquals(a: Map<Int, IntArray>, b: Map<Int, IntArray>): Boolean {
             if (a.size != b.size) return false
             for ((k, v) in a) {
                 val o = b[k] ?: return false
@@ -176,20 +175,28 @@ data class TerminalSnapshot(
             var off = 0
             for (i in 0 until cellCount) {
                 // codepoint: little-endian i32 from 4 bytes
-                codepoints[i] = (cellBytes[off].toInt() and 0xFF) or
-                    ((cellBytes[off + 1].toInt() and 0xFF) shl 8) or
-                    ((cellBytes[off + 2].toInt() and 0xFF) shl 16) or
-                    ((cellBytes[off + 3].toInt() and 0xFF) shl 24)
+                codepoints[i] =
+                    (cellBytes[off].toInt() and 0xFF) or
+                        ((cellBytes[off + 1].toInt() and 0xFF) shl 8) or
+                        ((cellBytes[off + 2].toInt() and 0xFF) shl 16) or
+                        ((cellBytes[off + 3].toInt() and 0xFF) shl 24)
                 off += 4
-                val fgR = cellBytes[off].toInt() and 0xFF; off++
-                val fgG = cellBytes[off].toInt() and 0xFF; off++
-                val fgB = cellBytes[off].toInt() and 0xFF; off++
-                val bgR = cellBytes[off].toInt() and 0xFF; off++
-                val bgG = cellBytes[off].toInt() and 0xFF; off++
-                val bgB = cellBytes[off].toInt() and 0xFF; off++
+                val fgR = cellBytes[off].toInt() and 0xFF
+                off++
+                val fgG = cellBytes[off].toInt() and 0xFF
+                off++
+                val fgB = cellBytes[off].toInt() and 0xFF
+                off++
+                val bgR = cellBytes[off].toInt() and 0xFF
+                off++
+                val bgG = cellBytes[off].toInt() and 0xFF
+                off++
+                val bgB = cellBytes[off].toInt() and 0xFF
+                off++
                 fgArgb[i] = packArgb(fgR, fgG, fgB)
                 bgArgb[i] = packArgb(bgR, bgG, bgB)
-                flags[i] = cellBytes[off]; off++
+                flags[i] = cellBytes[off]
+                off++
             }
 
             val graphemeExtras: Map<Int, IntArray> =
@@ -209,7 +216,11 @@ data class TerminalSnapshot(
                             }
                             val cellIndex = extras.int
                             val count = extras.int
-                            if (cellIndex !in 0 until cellCount || count < 0 || extras.remaining() < count * 4) {
+                            if (
+                                cellIndex !in 0 until cellCount ||
+                                    count < 0 ||
+                                    extras.remaining() < count * 4
+                            ) {
                                 valid = false
                                 break
                             }
@@ -223,24 +234,25 @@ data class TerminalSnapshot(
                     emptyMap()
                 }
 
-            val snapshot = TerminalSnapshot(
-                cols = cols,
-                rows = rows,
-                cursorX = cursorX,
-                cursorY = cursorY,
-                cursorVisible = cursorVisible,
-                cursorStyle = cursorStyle,
-                defaultBgArgb = packArgb(defaultBgR, defaultBgG, defaultBgB),
-                defaultFgArgb = packArgb(defaultFgR, defaultFgG, defaultFgB),
-                codepoints = codepoints,
-                fgArgb = fgArgb,
-                bgArgb = bgArgb,
-                flags = flags,
-                graphemeExtras = graphemeExtras,
-                images = images,
-                viewportScrollY = viewportScrollY,
-                appHandlesSelectionDrag = appHandlesSelectionDrag,
-            )
+            val snapshot =
+                TerminalSnapshot(
+                    cols = cols,
+                    rows = rows,
+                    cursorX = cursorX,
+                    cursorY = cursorY,
+                    cursorVisible = cursorVisible,
+                    cursorStyle = cursorStyle,
+                    defaultBgArgb = packArgb(defaultBgR, defaultBgG, defaultBgB),
+                    defaultFgArgb = packArgb(defaultFgR, defaultFgG, defaultFgB),
+                    codepoints = codepoints,
+                    fgArgb = fgArgb,
+                    bgArgb = bgArgb,
+                    flags = flags,
+                    graphemeExtras = graphemeExtras,
+                    images = images,
+                    viewportScrollY = viewportScrollY,
+                    appHandlesSelectionDrag = appHandlesSelectionDrag,
+                )
 
             return snapshot
         }
@@ -270,10 +282,13 @@ data class TerminalSnapshot(
                 val dataLen = wrapped.int
 
                 val expectedLen = imgW.toLong() * imgH.toLong() * 4L
-                if (imgW <= 0 || imgH <= 0 || dataLen <= 0 ||
-                    expectedLen > Int.MAX_VALUE ||
-                    dataLen != expectedLen.toInt() ||
-                    wrapped.remaining() < dataLen
+                if (
+                    imgW <= 0 ||
+                        imgH <= 0 ||
+                        dataLen <= 0 ||
+                        expectedLen > Int.MAX_VALUE ||
+                        dataLen != expectedLen.toInt() ||
+                        wrapped.remaining() < dataLen
                 ) {
                     Log.w(
                         "TerminalSnapshot",
@@ -289,21 +304,22 @@ data class TerminalSnapshot(
                 bitmap.copyPixelsFromBuffer(pixelBytes)
                 wrapped.position(wrapped.position() + dataLen)
 
-                images += ImagePlacement(
-                    cellCol = cellCol,
-                    cellRow = cellRow,
-                    cellXOffset = cellXOffset,
-                    cellYOffset = cellYOffset,
-                    destW = destW,
-                    destH = destH,
-                    srcX = srcX,
-                    srcY = srcY,
-                    srcW = srcW,
-                    srcH = srcH,
-                    imgW = imgW,
-                    imgH = imgH,
-                    bitmap = bitmap,
-                )
+                images +=
+                    ImagePlacement(
+                        cellCol = cellCol,
+                        cellRow = cellRow,
+                        cellXOffset = cellXOffset,
+                        cellYOffset = cellYOffset,
+                        destW = destW,
+                        destH = destH,
+                        srcX = srcX,
+                        srcY = srcY,
+                        srcW = srcW,
+                        srcH = srcH,
+                        imgW = imgW,
+                        imgH = imgH,
+                        bitmap = bitmap,
+                    )
             }
             return images
         }

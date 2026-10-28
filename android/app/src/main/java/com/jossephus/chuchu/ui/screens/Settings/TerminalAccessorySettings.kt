@@ -12,13 +12,13 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,33 +26,31 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import com.jossephus.chuchu.ui.screens.Terminal.TerminalTabMode
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -60,10 +58,10 @@ import com.jossephus.chuchu.data.repository.SettingsRepository
 import com.jossephus.chuchu.ui.components.ChuButton
 import com.jossephus.chuchu.ui.components.ChuButtonVariant
 import com.jossephus.chuchu.ui.components.ChuCard
-import com.jossephus.chuchu.ui.components.ChuText
 import com.jossephus.chuchu.ui.components.ChuSwitch
+import com.jossephus.chuchu.ui.components.ChuText
 import com.jossephus.chuchu.ui.components.ChuTextField
-import com.jossephus.chuchu.ui.terminal.AccessoryKeyItem
+import com.jossephus.chuchu.ui.screens.Terminal.TerminalTabMode
 import com.jossephus.chuchu.ui.terminal.BuiltinCommand
 import com.jossephus.chuchu.ui.terminal.BuiltinShortcutStore
 import com.jossephus.chuchu.ui.terminal.KeyboardAccessoryBar
@@ -105,9 +103,10 @@ internal fun TerminalSettings(
     var tabModeExpanded by remember { mutableStateOf(false) }
     var tabModeAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     var tabModeContainerBounds by remember { mutableStateOf<Rect?>(null) }
-    val selectedEntries = remember(currentAccessoryLayoutIds) {
-        TerminalAccessoryLayoutStore.resolveSelectedLayout(currentAccessoryLayoutIds)
-    }
+    val selectedEntries =
+        remember(currentAccessoryLayoutIds) {
+            TerminalAccessoryLayoutStore.resolveSelectedLayout(currentAccessoryLayoutIds)
+        }
     val density = LocalDensity.current
 
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -120,9 +119,10 @@ internal fun TerminalSettings(
 
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.onGloballyPositioned { coordinates ->
-            tabModeContainerBounds = coordinates.boundsInWindow()
-        },
+        modifier =
+            Modifier.onGloballyPositioned { coordinates ->
+                tabModeContainerBounds = coordinates.boundsInWindow()
+            },
     ) {
         // Font size selector
         ChuCard(modifier = Modifier.fillMaxWidth()) {
@@ -144,13 +144,17 @@ internal fun TerminalSettings(
                             onClick = {
                                 onTerminalFontSizeChanged(
                                     (currentTerminalFontSize.roundToInt() - 1)
-                                        .coerceAtLeast(SettingsRepository.MIN_TERMINAL_FONT_SIZE.toInt())
-                                        .toFloat(),
+                                        .coerceAtLeast(
+                                            SettingsRepository.MIN_TERMINAL_FONT_SIZE.toInt()
+                                        )
+                                        .toFloat()
                                 )
                             },
                             variant = ChuButtonVariant.Outlined,
                             bracketed = true,
-                            enabled = currentTerminalFontSize.roundToInt() > SettingsRepository.MIN_TERMINAL_FONT_SIZE.toInt(),
+                            enabled =
+                                currentTerminalFontSize.roundToInt() >
+                                    SettingsRepository.MIN_TERMINAL_FONT_SIZE.toInt(),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             ChuText("-", style = typography.label)
@@ -160,13 +164,17 @@ internal fun TerminalSettings(
                             onValueChange = { value ->
                                 val digits = value.filter { it.isDigit() }
                                 if (digits.isNotEmpty()) {
-                                val parsed = digits.toIntOrNull() ?: SettingsRepository.MIN_TERMINAL_FONT_SIZE.toInt()
-                                onTerminalFontSizeChanged(
-                                    parsed.coerceIn(
-                                        SettingsRepository.MIN_TERMINAL_FONT_SIZE.toInt(),
-                                        SettingsRepository.MAX_TERMINAL_FONT_SIZE.toInt(),
-                                    ).toFloat(),
-                                )
+                                    val parsed =
+                                        digits.toIntOrNull()
+                                            ?: SettingsRepository.MIN_TERMINAL_FONT_SIZE.toInt()
+                                    onTerminalFontSizeChanged(
+                                        parsed
+                                            .coerceIn(
+                                                SettingsRepository.MIN_TERMINAL_FONT_SIZE.toInt(),
+                                                SettingsRepository.MAX_TERMINAL_FONT_SIZE.toInt(),
+                                            )
+                                            .toFloat()
+                                    )
                                 }
                             },
                             label = "",
@@ -181,13 +189,17 @@ internal fun TerminalSettings(
                             onClick = {
                                 onTerminalFontSizeChanged(
                                     (currentTerminalFontSize.roundToInt() + 1)
-                                        .coerceAtMost(SettingsRepository.MAX_TERMINAL_FONT_SIZE.toInt())
-                                        .toFloat(),
+                                        .coerceAtMost(
+                                            SettingsRepository.MAX_TERMINAL_FONT_SIZE.toInt()
+                                        )
+                                        .toFloat()
                                 )
                             },
                             variant = ChuButtonVariant.Outlined,
                             bracketed = true,
-                            enabled = currentTerminalFontSize.roundToInt() < SettingsRepository.MAX_TERMINAL_FONT_SIZE.toInt(),
+                            enabled =
+                                currentTerminalFontSize.roundToInt() <
+                                    SettingsRepository.MAX_TERMINAL_FONT_SIZE.toInt(),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             ChuText("+", style = typography.label)
@@ -214,9 +226,10 @@ internal fun TerminalSettings(
                             onClick = { tabModeExpanded = !tabModeExpanded },
                             variant = ChuButtonVariant.Outlined,
                             bracketed = true,
-                            modifier = Modifier.onGloballyPositioned { coordinates ->
-                                tabModeAnchorBounds = coordinates.boundsInWindow()
-                            },
+                            modifier =
+                                Modifier.onGloballyPositioned { coordinates ->
+                                    tabModeAnchorBounds = coordinates.boundsInWindow()
+                                },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Row(
@@ -246,33 +259,40 @@ internal fun TerminalSettings(
             if (anchorBounds != null && containerBounds != null) {
                 Popup(
                     alignment = Alignment.TopStart,
-                    offset = with(density) {
-                        IntOffset(
-                            x = (anchorBounds.left - containerBounds.left).roundToInt(),
-                            y = (anchorBounds.bottom - containerBounds.top).roundToInt() + 2.dp.roundToPx(),
-                        )
-                    },
+                    offset =
+                        with(density) {
+                            IntOffset(
+                                x = (anchorBounds.left - containerBounds.left).roundToInt(),
+                                y =
+                                    (anchorBounds.bottom - containerBounds.top).roundToInt() +
+                                        2.dp.roundToPx(),
+                            )
+                        },
                     onDismissRequest = { tabModeExpanded = false },
                     properties = PopupProperties(focusable = true),
                 ) {
                     Column(
-                        modifier = Modifier
-                            .widthIn(min = with(density) { anchorBounds.width.toDp() })
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(colors.surface)
-                            .border(1.dp, colors.border.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
-                            .padding(vertical = 6.dp),
+                        modifier =
+                            Modifier.widthIn(min = with(density) { anchorBounds.width.toDp() })
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(colors.surface)
+                                .border(
+                                    1.dp,
+                                    colors.border.copy(alpha = 0.7f),
+                                    RoundedCornerShape(16.dp),
+                                )
+                                .padding(vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         TerminalTabMode.entries.forEach { mode ->
                             val isSelected = mode == currentTabMode
                             Row(
-                                modifier = Modifier
-                                    .clickable {
-                                        onTabModeChanged(mode)
-                                        tabModeExpanded = false
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                modifier =
+                                    Modifier.clickable {
+                                            onTabModeChanged(mode)
+                                            tabModeExpanded = false
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -306,7 +326,8 @@ internal fun TerminalSettings(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         ChuText("accessory keys", style = typography.label)
                         ChuText(
-                            if (selectedEntries.isEmpty()) "no keys enabled" else "${selectedEntries.size} keys enabled",
+                            if (selectedEntries.isEmpty()) "no keys enabled"
+                            else "${selectedEntries.size} keys enabled",
                             style = typography.body,
                             color = colors.textMuted,
                         )
@@ -351,11 +372,7 @@ internal fun TerminalSettings(
                         color = colors.textSecondary,
                     )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(colors.surfaceVariant),
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth().background(colors.surfaceVariant)) {
                         KeyboardAccessoryBar(
                             entries = selectedEntries,
                             modifierState = ModifierState(),
@@ -398,11 +415,7 @@ internal fun TerminalSettings(
                     }
                 }
 
-                ChuText(
-                    "create quick keys.",
-                    style = typography.body,
-                    color = colors.textSecondary,
-                )
+                ChuText("create quick keys.", style = typography.body, color = colors.textSecondary)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -468,10 +481,7 @@ internal fun TerminalSettings(
 
         ChuCard(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 48.dp)
-                    .padding(12.dp),
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -486,19 +496,13 @@ internal fun TerminalSettings(
                         color = colors.textMuted,
                     )
                 }
-                ChuSwitch(
-                    checked = localShellEnabled,
-                    onCheckedChange = onLocalShellEnabledChanged,
-                )
+                ChuSwitch(checked = localShellEnabled, onCheckedChange = onLocalShellEnabledChanged)
             }
         }
 
         ChuCard(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 48.dp)
-                    .padding(12.dp),
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -513,19 +517,13 @@ internal fun TerminalSettings(
                         color = colors.textMuted,
                     )
                 }
-                ChuSwitch(
-                    checked = keepScreenAwake,
-                    onCheckedChange = onKeepScreenAwakeChanged,
-                )
+                ChuSwitch(checked = keepScreenAwake, onCheckedChange = onKeepScreenAwakeChanged)
             }
         }
 
         ChuCard(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 48.dp)
-                    .padding(12.dp),
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -555,20 +553,13 @@ internal fun TerminalSettings(
 }
 
 @Composable
-private fun DisableAutocorrectSetting(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
+private fun DisableAutocorrectSetting(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     val colors = ChuColors.current
     val typography = ChuTypography.current
 
     ChuCard(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 48.dp)
-                    .padding(12.dp),
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -583,10 +574,7 @@ private fun DisableAutocorrectSetting(
                     color = colors.textMuted,
                 )
             }
-            ChuSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-            )
+            ChuSwitch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }
@@ -619,20 +607,16 @@ internal fun ChuchuCommandsEditorSheet(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
+        AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colors.background.copy(alpha = 0.72f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismiss,
-                    ),
+                modifier =
+                    Modifier.fillMaxSize()
+                        .background(colors.background.copy(alpha = 0.72f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss,
+                        )
             )
         }
 
@@ -643,16 +627,16 @@ internal fun ChuchuCommandsEditorSheet(
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.surfaceVariant)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    )
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(16.dp),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .background(colors.surfaceVariant)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Row(
@@ -681,9 +665,7 @@ internal fun ChuchuCommandsEditorSheet(
                 }
 
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     BuiltinCommand.entries.forEach { command ->
@@ -740,12 +722,11 @@ internal fun ChuchuCommandsEditorSheet(
     }
 }
 
-private fun tabModeLabel(mode: TerminalTabMode): String = when (mode) {
-    TerminalTabMode.Classic -> "palette"
-    TerminalTabMode.Strip -> "tab strip"
-}
-
-
+private fun tabModeLabel(mode: TerminalTabMode): String =
+    when (mode) {
+        TerminalTabMode.Classic -> "palette"
+        TerminalTabMode.Strip -> "tab strip"
+    }
 
 @Composable
 internal fun AccessoryLayoutEditorSheet(
@@ -759,23 +740,26 @@ internal fun AccessoryLayoutEditorSheet(
     val density = LocalDensity.current
     val reorderStepPx = with(density) { 40.dp.toPx() }
     val allEntries = remember { TerminalAccessoryLayoutStore.allCatalogEntries() }
-    var draftSelectedIds by remember(selectedIds) {
-        mutableStateOf(TerminalAccessoryLayoutStore.normalizeIds(selectedIds))
-    }
+    var draftSelectedIds by
+        remember(selectedIds) {
+            mutableStateOf(TerminalAccessoryLayoutStore.normalizeIds(selectedIds))
+        }
     var previewDraggingId by remember { mutableStateOf<String?>(null) }
     var previewDragRemainderPx by remember { mutableFloatStateOf(0f) }
     var previewDragOffsetPx by remember { mutableFloatStateOf(0f) }
 
-    val selectedEntries = remember(draftSelectedIds) {
-        TerminalAccessoryLayoutStore.resolveSelectedLayout(draftSelectedIds)
-    }
+    val selectedEntries =
+        remember(draftSelectedIds) {
+            TerminalAccessoryLayoutStore.resolveSelectedLayout(draftSelectedIds)
+        }
 
     fun toggleEntry(entry: ResolvedAccessoryEntry) {
-        draftSelectedIds = if (entry.id in draftSelectedIds) {
-            draftSelectedIds.filterNot { it == entry.id }
-        } else {
-            draftSelectedIds + entry.id
-        }
+        draftSelectedIds =
+            if (entry.id in draftSelectedIds) {
+                draftSelectedIds.filterNot { it == entry.id }
+            } else {
+                draftSelectedIds + entry.id
+            }
     }
 
     fun moveSelectedItem(itemId: String, direction: Int): Boolean {
@@ -791,20 +775,16 @@ internal fun AccessoryLayoutEditorSheet(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
+        AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colors.background.copy(alpha = 0.72f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDismiss,
-                    ),
+                modifier =
+                    Modifier.fillMaxSize()
+                        .background(colors.background.copy(alpha = 0.72f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss,
+                        )
             )
         }
 
@@ -815,17 +795,17 @@ internal fun AccessoryLayoutEditorSheet(
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.82f)
-                    .background(colors.surfaceVariant)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {},
-                    )
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(16.dp),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .fillMaxHeight(0.82f)
+                        .background(colors.surfaceVariant)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Row(
@@ -865,7 +845,8 @@ internal fun AccessoryLayoutEditorSheet(
                         ) {
                             ChuText("preview", style = typography.label)
                             ChuText(
-                                if (selectedEntries.isEmpty()) "0" else selectedEntries.size.toString(),
+                                if (selectedEntries.isEmpty()) "0"
+                                else selectedEntries.size.toString(),
                                 style = typography.labelSmall,
                                 color = colors.textMuted,
                             )
@@ -878,78 +859,105 @@ internal fun AccessoryLayoutEditorSheet(
                                 color = colors.textMuted,
                             )
                         } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            selectedEntries.forEach { item ->
-                                key(item.id) {
-                                    val isDragging = previewDraggingId == item.id
-                                    PreviewKeyChip(
-                                        entry = item,
-                                        dragging = isDragging,
-                                        modifier = Modifier.pointerInput(item.id) {
-                                            detectDragGesturesAfterLongPress(
-                                                onDragStart = {
-                                                    previewDraggingId = item.id
-                                                    previewDragRemainderPx = 0f
-                                                    previewDragOffsetPx = 0f
+                            Row(
+                                modifier =
+                                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                selectedEntries.forEach { item ->
+                                    key(item.id) {
+                                        val isDragging = previewDraggingId == item.id
+                                        PreviewKeyChip(
+                                            entry = item,
+                                            dragging = isDragging,
+                                            modifier =
+                                                Modifier.pointerInput(item.id) {
+                                                    detectDragGesturesAfterLongPress(
+                                                        onDragStart = {
+                                                            previewDraggingId = item.id
+                                                            previewDragRemainderPx = 0f
+                                                            previewDragOffsetPx = 0f
+                                                        },
+                                                        onDragEnd = {
+                                                            previewDraggingId = null
+                                                            previewDragRemainderPx = 0f
+                                                            previewDragOffsetPx = 0f
+                                                        },
+                                                        onDragCancel = {
+                                                            previewDraggingId = null
+                                                            previewDragRemainderPx = 0f
+                                                            previewDragOffsetPx = 0f
+                                                        },
+                                                        onDrag = { change, dragAmount ->
+                                                            change.consume()
+                                                            previewDragRemainderPx += dragAmount.x
+                                                            previewDragOffsetPx += dragAmount.x
+                                                            if (
+                                                                previewDragRemainderPx >=
+                                                                    reorderStepPx
+                                                            ) {
+                                                                val stepCount =
+                                                                    (previewDragRemainderPx /
+                                                                            reorderStepPx)
+                                                                        .toInt()
+                                                                repeat(stepCount) {
+                                                                    if (
+                                                                        !moveSelectedItem(
+                                                                            item.id,
+                                                                            1,
+                                                                        )
+                                                                    )
+                                                                        return@repeat
+                                                                    previewDragRemainderPx -=
+                                                                        reorderStepPx
+                                                                    previewDragOffsetPx -=
+                                                                        reorderStepPx
+                                                                }
+                                                            } else if (
+                                                                previewDragRemainderPx <=
+                                                                    -reorderStepPx
+                                                            ) {
+                                                                val stepCount =
+                                                                    (-previewDragRemainderPx /
+                                                                            reorderStepPx)
+                                                                        .toInt()
+                                                                repeat(stepCount) {
+                                                                    if (
+                                                                        !moveSelectedItem(
+                                                                            item.id,
+                                                                            -1,
+                                                                        )
+                                                                    )
+                                                                        return@repeat
+                                                                    previewDragRemainderPx +=
+                                                                        reorderStepPx
+                                                                    previewDragOffsetPx +=
+                                                                        reorderStepPx
+                                                                }
+                                                            }
+                                                        },
+                                                    )
                                                 },
-                                                onDragEnd = {
-                                                    previewDraggingId = null
-                                                    previewDragRemainderPx = 0f
-                                                    previewDragOffsetPx = 0f
-                                                },
-                                                onDragCancel = {
-                                                    previewDraggingId = null
-                                                    previewDragRemainderPx = 0f
-                                                    previewDragOffsetPx = 0f
-                                                },
-                                                onDrag = { change, dragAmount ->
-                                                    change.consume()
-                                                    previewDragRemainderPx += dragAmount.x
-                                                    previewDragOffsetPx += dragAmount.x
-                                                    if (previewDragRemainderPx >= reorderStepPx) {
-                                                        val stepCount = (previewDragRemainderPx / reorderStepPx).toInt()
-                                                        repeat(stepCount) {
-                                                            if (!moveSelectedItem(item.id, 1)) return@repeat
-                                                            previewDragRemainderPx -= reorderStepPx
-                                                            previewDragOffsetPx -= reorderStepPx
-                                                        }
-                                                    } else if (previewDragRemainderPx <= -reorderStepPx) {
-                                                        val stepCount = (-previewDragRemainderPx / reorderStepPx).toInt()
-                                                        repeat(stepCount) {
-                                                            if (!moveSelectedItem(item.id, -1)) return@repeat
-                                                            previewDragRemainderPx += reorderStepPx
-                                                            previewDragOffsetPx += reorderStepPx
-                                                        }
-                                                    }
-                                                },
-                                            )
-                                        },
-                                        dragOffsetPx = if (isDragging) previewDragOffsetPx else 0f,
-                                    )
+                                            dragOffsetPx =
+                                                if (isDragging) previewDragOffsetPx else 0f,
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        ChuText(
-                            "long-press a key in preview, then drag to place it where you want.",
-                            style = typography.body,
-                            color = colors.textMuted,
-                        )
+                            ChuText(
+                                "long-press a key in preview, then drag to place it where you want.",
+                                style = typography.body,
+                                color = colors.textMuted,
+                            )
+                        }
                     }
-                }
                 }
 
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
+                    modifier =
+                        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     allEntries.forEach { item ->
@@ -967,7 +975,9 @@ internal fun AccessoryLayoutEditorSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     ChuButton(
-                        onClick = { draftSelectedIds = TerminalAccessoryLayoutStore.defaultLayoutIds() },
+                        onClick = {
+                            draftSelectedIds = TerminalAccessoryLayoutStore.defaultLayoutIds()
+                        },
                         variant = ChuButtonVariant.Outlined,
                         bracketed = true,
                         modifier = Modifier.weight(1f),
@@ -999,10 +1009,13 @@ private fun PreviewKeyChip(
     val typography = ChuTypography.current
 
     Box(
-        modifier = modifier
-            .offset { IntOffset(x = dragOffsetPx.roundToInt(), y = 0) }
-            .background(if (dragging) colors.accent.copy(alpha = 0.2f) else colors.surfaceVariant)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+        modifier =
+            modifier
+                .offset { IntOffset(x = dragOffsetPx.roundToInt(), y = 0) }
+                .background(
+                    if (dragging) colors.accent.copy(alpha = 0.2f) else colors.surfaceVariant
+                )
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1041,19 +1054,21 @@ private fun AccessoryChooserRow(
         }
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(if (selected) colors.surface else colors.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(10.dp),
+        modifier =
+            Modifier.fillMaxWidth()
+                .background(if (selected) colors.surface else colors.surfaceVariant)
+                .clickable(onClick = onClick)
+                .padding(10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .width(34.dp)
-                .height(34.dp)
-                .background(if (selected) colors.accent.copy(alpha = 0.18f) else colors.surface),
+            modifier =
+                Modifier.width(34.dp)
+                    .height(34.dp)
+                    .background(
+                        if (selected) colors.accent.copy(alpha = 0.18f) else colors.surface
+                    ),
             contentAlignment = Alignment.Center,
         ) {
             ChuText(
@@ -1064,16 +1079,8 @@ private fun AccessoryChooserRow(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            ChuText(
-                text = entry.label,
-                style = typography.label,
-                color = colors.textPrimary,
-            )
-            ChuText(
-                text = description,
-                style = typography.labelSmall,
-                color = colors.textMuted,
-            )
+            ChuText(text = entry.label, style = typography.label, color = colors.textPrimary)
+            ChuText(text = description, style = typography.labelSmall, color = colors.textMuted)
         }
     }
 }
