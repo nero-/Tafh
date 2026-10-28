@@ -116,6 +116,32 @@ make lint          # ktlint with android/.editorconfig
 make native-fmt-check
 ```
 
+## Signing
+
+Release APKs must be signed, and an unsigned one will not install. Signing
+material is per repository (GitHub secrets do not transfer across forks), so a
+fresh clone publishes nothing until you add four repository secrets:
+
+| Secret | Value |
+|---|---|
+| `KEYSTORE_BASE64` | `base64 -w0 release.jks` of your keystore |
+| `KEYSTORE_PASSWORD` | keystore password |
+| `KEY_ALIAS` | key alias inside the keystore |
+| `KEY_PASSWORD` | key password |
+
+Create one once, then keep it safe: losing it means you can never update an
+installed app again.
+
+```sh
+keytool -genkeypair -v -keystore release.jks -alias tafh \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+For local release builds, put `key.jks` in `android/app/` and export the same
+three `KEYSTORE_*`/`KEY_*` variables; without them `assembleRelease` produces an
+unsigned APK. Both publishing workflows now refuse to upload when
+`KEYSTORE_BASE64` is missing, rather than shipping an APK that cannot install.
+
 ## Inspiration
 
 Tafh is a community continuation of the original [chuchu](https://github.com/jossephus/chuchu)

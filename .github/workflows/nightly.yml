@@ -112,9 +112,20 @@ jobs:
           cd rust
           cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release -p tafh-backup
 
+      # Signing material is per-repository: secrets do not transfer to a fork, and
+      # an unsigned APK cannot be installed. Fail here with an actionable message
+      # instead of publishing an artifact that silently does not install.
       - name: generate release key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          cd android/app/ && echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > key.jks
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64}" ]; then
+            echo "::error::KEYSTORE_BASE64 is not set for this repository. Add KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD (see README, 'Signing') and re-run."
+            exit 1
+          fi
+          printf '%s' "${KEYSTORE_BASE64}" | base64 -d > android/app/key.jks
+          test -s android/app/key.jks
 
       - name: build android release APK
         env:
