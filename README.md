@@ -137,6 +137,17 @@ keytool -genkeypair -v -keystore release.jks -alias tafh \
   -keyalg RSA -keysize 4096 -validity 10000
 ```
 
+Verify the keystore against the credentials you are about to store, before
+adding the secrets (and whenever a release fails in "generate release key"):
+
+```sh
+tools/verify-signing.sh release.jks
+```
+
+It reports whether the password opens the keystore, lists the aliases inside, and
+prints the exact `KEY_ALIAS` values to use. The signing step in CI applies the
+same normalisation to the secrets, so a value that works here works there.
+
 For local release builds, put `key.jks` in `android/app/` and export the same
 three `KEYSTORE_*`/`KEY_*` variables; without them `assembleRelease` produces an
 unsigned APK. Both publishing workflows now refuse to upload when
