@@ -168,11 +168,20 @@ jobs:
               exit 1
               ;;
           esac
-          # Secrets are frequently pasted with a trailing newline; strip surrounding
-          # whitespace from the credentials before trying them.
-          STOREPASS="$(printf '%s' "${KEYSTORE_PASSWORD:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-          ALIAS="$(printf '%s' "${KEY_ALIAS:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-          KEYPASS="$(printf '%s' "${KEY_PASSWORD:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          # Credentials suffer the same paste damage as the keystore blob: trailing
+          # newlines, literal backslash-n escapes inserted by a shell round-trip, and
+          # surrounding quotes. Normalise them the same way. Password *contents* are
+          # never printed; only their length, which is enough to spot the usual bug.
+          normalise_secret() {
+            local v="${1:-}"
+            v="${v#\"}"; v="${v%\"}"; v="${v#\'}"; v="${v%\'}"
+            printf '%s' "$v" | sed -e 's/\\n$//' -e 's/\\r$//' \
+                                 -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+          }
+          STOREPASS="$(normalise_secret "${KEYSTORE_PASSWORD:-}")"
+          ALIAS="$(normalise_secret "${KEY_ALIAS:-}")"
+          KEYPASS="$(normalise_secret "${KEY_PASSWORD:-}")"
+          echo "credential lengths: KEYSTORE_PASSWORD=${#STOREPASS} KEY_PASSWORD=${#KEYPASS} KEY_ALIAS=${#ALIAS}"
 
           # Final proof, in stages so the error names the secret to fix. PKCS12 stores
           # usually share one password, so a store that rejects KEYSTORE_PASSWORD very
