@@ -32,3 +32,4 @@ zig-out/
 
 # Rust
 /rust/target/
+/dist/
