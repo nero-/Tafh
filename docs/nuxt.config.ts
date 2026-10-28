@@ -11,7 +11,7 @@ export default defineNuxtConfig({
   app: {
     baseURL: process.env.NUXT_APP_BASE_URL || '/',
     head: {
-      title: 'chuchu',
+      title: 'Tafh',
       htmlAttrs: { lang: 'en' },
       bodyAttrs: { class: 'antialiased' },
       meta: [
@@ -20,10 +20,10 @@ export default defineNuxtConfig({
         {
           name: 'description',
           content:
-            'chuchu is a modern, native Android SSH client powered by libghostty.',
+            'Tafh is a modern, native Android SSH client powered by libghostty.',
         },
         { name: 'theme-color', content: '#1E1E2E' },
-        { property: 'og:title', content: 'chuchu' },
+        { property: 'og:title', content: 'Tafh' },
         {
           property: 'og:description',
           content:
@@ -52,7 +52,7 @@ export default defineNuxtConfig({
         {
           innerHTML: `
             (function() {
-              var theme = localStorage.getItem('chuchu-theme');
+              var theme = localStorage.getItem('tafh-theme');
               if (theme === 'light' || (!theme && window.matchMedia('(prefers-color-scheme: light)').matches)) {
                 document.documentElement.setAttribute('data-theme', 'light');
               }

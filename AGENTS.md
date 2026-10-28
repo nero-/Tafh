@@ -9,7 +9,6 @@ Examples:
 zigdoc std.fs
 zigdoc std.posix.getuid
 zigdoc ghostty-vt.Terminal
-zigdoc vaxis.Window
 ```
 
 ## Common Zig Patterns
@@ -69,7 +68,12 @@ const foo = Type{ .field = value };     // Avoid
 
 **Documentation:** Use `///` for public API, `//` for implementation notes. Always explain *why*, not just *what*.
 
-**Tests:** Inline in the same file, register in src/main.zig test block
+**Tests:** Inline `test` blocks in the same file as the code under test. Host-runnable
+tests belong in `zig-src/src/bridge/*.zig`; each host-testable module must also be listed
+in `host_test_modules` in `zig-src/build.zig`, otherwise its tests are never compiled.
+Modules that pull in `jni.h`, ghostty, mosh or libssh2 are Android-only and deliberately
+excluded. Run them with `zig build test` from `zig-src/` (or `make native-test` from the
+repo root).
 
 ## Safety Conventions
 
@@ -90,8 +94,3 @@ Inspired by [TigerStyle](https://github.com/tigerbeetle/tigerbeetle/blob/main/do
 - Explain *why* the code exists, not *what* it does
 - Document non-obvious thresholds, timing values, protocol details
 
-## Progress Tracking
-
-- Keep `.plans/progress.txt` updated whenever a feature is fixed, completed, or materially advanced.
-- After each feature-level change, update the relevant phase/task status and append a dated progress log entry.
-- Do not defer progress updates; treat them as part of the same change.

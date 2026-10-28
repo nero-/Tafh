@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const year = new Date().getFullYear()
 
-const release = await $fetch('https://api.github.com/repos/jossephus/chuchu/releases/latest').catch(() => null)
+const release = await $fetch('https://api.github.com/repos/nero-/Tafh/releases/latest').catch(() => null)
 const version = release?.tag_name ?? ''
 
 const groups = [
@@ -32,7 +32,7 @@ const groups = [
       'configurable accessory key row',
       'custom key macros & nested key groups',
       'per-host post-connect actions',
-      'chuchu key — leader prefix for app actions',
+      'tafh key — leader prefix for app actions',
       'foreground service keeps sessions alive',
     ],
   },
@@ -47,10 +47,10 @@ function applyTheme(dark: boolean) {
   isDark.value = dark
   if (dark) {
     document.documentElement.removeAttribute('data-theme')
-    localStorage.setItem('chuchu-theme', 'dark')
+    localStorage.setItem('tafh-theme', 'dark')
   } else {
     document.documentElement.setAttribute('data-theme', 'light')
-    localStorage.setItem('chuchu-theme', 'light')
+    localStorage.setItem('tafh-theme', 'light')
   }
 }
 
@@ -131,7 +131,7 @@ onMounted(() => {
       >
         <div class="flex items-stretch">
           <span class="seg bg-accent text-onAccent font-bold">NORMAL</span>
-          <span class="seg text-fg">chuchu</span>
+          <span class="seg text-fg">tafh</span>
           <span class="seg text-muted">{{ version }}</span>
         </div>
         <div class="flex items-stretch text-muted">
@@ -146,7 +146,7 @@ onMounted(() => {
             <span class="label">{{ isDark ? 'light' : 'dark' }}</span>
             <span class="bracket">]</span>
           </button>
-          <span class="seg hidden sm:inline-flex">~/chuchu</span>
+          <span class="seg hidden sm:inline-flex">~/tafh</span>
           <span class="seg bg-surfaceVar text-fg">main</span>
         </div>
       </div>
@@ -156,7 +156,7 @@ onMounted(() => {
           <div class="flex items-start gap-3">
             <img src="/logo.png" alt="" class="w-10 h-10" />
             <div>
-              <h1 class="text-fg text-lg font-bold">chuchu</h1>
+              <h1 class="text-fg text-lg font-bold">tafh</h1>
               <p class="text-fg text-base">
                 <span class="font-bold">native android ssh client</span>
                 <span class="text-muted"> · powered by libghostty</span>
@@ -165,7 +165,7 @@ onMounted(() => {
           </div>
 
           <p class="text-fg text-base leading-relaxed max-w-2xl">
-            <span class="text-accent">$</span> chuchu — a native
+            <span class="text-accent">$</span> tafh — a native
             <span class="bg-accent text-onAccent font-bold px-1.5 py-0.5">Android SSH client</span>
             with a beautiful terminal renderer. Tailscale, SSH and Mosh ·
             kitty image protocol · 400+ ghostty themes · multi-session tabs ·
@@ -174,7 +174,7 @@ onMounted(() => {
 
           <div class="flex flex-wrap gap-2">
             <a
-              :href="`https://github.com/jossephus/chuchu/releases/tag/${version}`"
+              :href="`https://github.com/nero-/Tafh/releases/tag/${version}`"
               class="bracket-btn accent"
             >
               <span class="bracket">[</span>
@@ -182,7 +182,7 @@ onMounted(() => {
               <span class="bracket">]</span>
             </a>
             <a
-              href="https://github.com/jossephus/chuchu/releases"
+              href="https://github.com/nero-/Tafh/releases"
               class="bracket-btn"
             >
               <span class="bracket">[</span>
@@ -190,7 +190,7 @@ onMounted(() => {
               <span class="bracket">]</span>
             </a>
             <a
-              href="https://github.com/jossephus/chuchu"
+              href="https://github.com/nero-/Tafh"
               class="bracket-btn"
             >
               <span class="bracket">[</span>
@@ -259,7 +259,7 @@ onMounted(() => {
         <div class="mt-10 md:mt-14">
           <div class="tui-rule">privacy</div>
           <p class="max-w-3xl text-sm text-fgSec leading-relaxed">
-            Chuchu is local-first. It stores your server profiles, SSH keys, host key fingerprints,
+            Tafh is local-first. It stores your server profiles, SSH keys, host key fingerprints,
             and app settings on your device, then uses the network only to connect to the servers
             you configure. The published privacy policy is available at
             <NuxtLink to="/privacy" class="text-accent">/privacy</NuxtLink>.
@@ -268,10 +268,10 @@ onMounted(() => {
       </div>
 
       <footer class="border-t border-border px-6 py-4 text-xs text-muted md:px-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <span>© {{ year }} chuchu</span>
+        <span>© {{ year }} Tafh</span>
         <div class="flex flex-wrap gap-4">
           <NuxtLink to="/privacy">privacy policy</NuxtLink>
-          <a href="https://github.com/jossephus/chuchu/issues">contact</a>
+          <a href="https://github.com/nero-/Tafh/issues">contact</a>
         </div>
       </footer>
     </div>

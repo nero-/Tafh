@@ -250,12 +250,9 @@ fun ApplicationNavController() {
                 onTerminalCustomActionsChanged = settingsRepo::setTerminalCustomKeyGroups,
                 backupViewModel = backupViewModel,
                 keysViewModel = keysViewModel,
-                onBack = {
-                    val currentRoute = navController.currentBackStackEntry?.destination?.route
-                    if (currentRoute == "settings") {
-                        navController.popBackStack()
-                    }
-                },
+                // Comparing the raw route is fragile: the settings destination is declared with
+                // the optional `restore` argument, so its route string never equals "settings".
+                onBack = { navController.popBackStack() },
             )
         }
         composable("servers/add") {

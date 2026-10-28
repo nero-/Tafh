@@ -12,7 +12,7 @@
 #   - `adb` is installed and on PATH.
 #
 # Usage:
-#   ./demo_chuchu.sh [device_id]
+#   ./demo_tafh.sh [device_id]
 #
 set -e
 
@@ -205,7 +205,7 @@ Prereqs:
   - `adb` installed and on PATH.
 
 Usage:
-  ./demo_chuchu.sh [DEVICE_ID]
+  ./demo_tafh.sh [DEVICE_ID]
 
 DEVICE_ID:
   Optional. Specify the device serial when multiple devices are connected.

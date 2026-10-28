@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jossephus/tafh/releases/latest">Download Latest</a> ·
-  <a href="https://github.com/jossephus/tafh/releases/">ChangeLog</a> ·
+  <a href="https://github.com/nero-/Tafh/releases/latest">Download Latest</a> ·
+  <a href="https://github.com/nero-/Tafh/releases/">ChangeLog</a> ·
 </p>
 
 ---
@@ -24,7 +24,7 @@
     <td><img src="./assets/sample-4.jpg" alt="Tafh sample 4" height="420" /></td>
 </table>
 
-Tafh is a native Android SSH client powered by libghostty, a terminal-first Compose UI, and has support for both standard SSH and Tailscale SSH workflows.
+Tafh is a native Android SSH client powered by libghostty, with a terminal-first Compose UI and support for both standard SSH and Tailscale SSH workflows.
 
 ### Features 
 - tailscale, ssh password + key authentication
@@ -37,17 +37,14 @@ Tafh is a native Android SSH client powered by libghostty, a terminal-first Comp
 
 ## Status
 
-Tafh is in active development. I am daily driving it and improving any issues i found in the way. Join the journey and report any bugs you find. And I welcome any contributions.
-
+Tafh is in active development. Bug reports and contributions are welcome.
 
 ### Getting Started
 
-Checkout our [releases](https://github.com/jossephus/tafh/releases) and download the APK from there.
+Grab the APK from the [releases](https://github.com/nero-/Tafh/releases) page.
 
 - **Stable:** the latest non-prerelease build
-- **Nightly:** every push to `main` publishes a rolling prerelease at the [`nightly`](https://github.com/jossephus/tafh/releases/tag/nightly) tag
-
-I don't have a personal Play Store account right now (and I can't open one because of the payment limitation in my country, feel free to contact me if you want to publish it.)
+- **Nightly:** every push to `main` publishes a rolling prerelease at the [`nightly`](https://github.com/nero-/Tafh/releases/tag/nightly) tag
 
 
 ## Stack
@@ -70,14 +67,14 @@ If you have nix installed, the following three steps will get you started
 If you don't have nix installed, you will need
 
 1. setup tools
-- Android Studio - This will set up the needed Android SDK, Android NDK and Java runtime (JDK 17+).
+- Android Studio - This will set up the needed Android SDK, Android NDK and Java runtime (JDK 17+; the nix devshell pins `JAVA_HOME` to JDK 17).
 - Zig 0.15.2
 2. build the native library
 
 Set `ANDROID_NDK_HOME` or `ANDROID_NDK_ROOT`, then build the JNI library for Android arm64:
 
 ```sh
-zig build jni -Dtarget=aarch64-linux-android
+cd zig-src && zig build jni -Dtarget=aarch64-linux-android
 ```
 
 That copies `libtafh_jni.so` into `app/src/main/jniLibs/arm64-v8a/`.
@@ -121,10 +118,33 @@ make native-fmt-check
 
 ## Inspiration
 
-I have been using [vvterm](https://github.com/vivy-company/vvterm) on iOS for the past few weeks and i really liked it.  This project came from my desire to have native ssh client but for android.
+Tafh is a community continuation of the original [chuchu](https://github.com/jossephus/chuchu)
+project by [jossephus](https://github.com/jossephus), who wrote the original Android
+SSH client and remains credited as its author. The fork keeps that work under the MIT
+license — see [LICENSE](./LICENSE), which retains the upstream copyright alongside the
+fork's.
+
+The original project was started because its author wanted a native Android SSH client
+with the kind of terminal experience [vvterm](https://github.com/vivy-company/vvterm)
+offers on iOS; Tafh continues along that line.
 
 ## Project Name
-tafh is one of my favorite characters from the amharic book [Yesinbit Kelemat](https://www.goodreads.com/book/show/30759971) [translated to colors of adios]. 
+
+Tafh is short for **"terminal away from home"**.
+
+## Upgrading from chuchu
+
+The package changed from `com.jossephus.chuchu` to `dev.nero.tafh`, so Android treats
+Tafh as a separate app with its own sandbox — it does not see the old app's data, and
+the two can be installed side by side.
+
+The supported upgrade path is a backup export/import:
+
+1. In the old chuchu app, export an encrypted backup.
+2. In Tafh, import that backup.
+
+The backup container (CHBK/CHPL v1) is unchanged and byte-compatible with previous
+chuchu releases, so existing backups import cleanly into Tafh.
 
 ## Demo
 
