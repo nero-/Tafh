@@ -152,33 +152,53 @@ jobs:
               exit 1
               ;;
           esac
-          # Final proof, in two parts so the error names the secret to fix.
-          if ! keytool -list -keystore android/app/key.jks -storepass "$KEYSTORE_PASSWORD" \
-                 >/dev/null 2>&1; then
-            echo "::error::The keystore decoded, but KEYSTORE_PASSWORD does not open it. Re-check that secret (it is the storepass, not the key password)."
-            exit 1
+          # Secrets are frequently pasted with a trailing newline; strip surrounding
+          # whitespace from the credentials before trying them.
+          STOREPASS="$(printf '%s' "${KEYSTORE_PASSWORD:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          ALIAS="$(printf '%s' "${KEY_ALIAS:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          KEYPASS="$(printf '%s' "${KEY_PASSWORD:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+          # Final proof, in stages so the error names the secret to fix. PKCS12 stores
+          # usually share one password, so a store that rejects KEYSTORE_PASSWORD very
+          # often means the two password secrets were swapped when they were entered.
+          if ! keytool -list -keystore android/app/key.jks -storepass "$STOREPASS" >/dev/null 2>&1; then
+            if [ -n "$KEYPASS" ] && keytool -list -keystore android/app/key.jks -storepass "$KEYPASS" >/dev/null 2>&1; then
+              echo "::warning::KEYSTORE_PASSWORD does not open the keystore but KEY_PASSWORD does; the two password secrets look swapped. Continuing with KEY_PASSWORD as the store password."
+              STOREPASS="$KEYPASS"
+            else
+              echo "::error::The keystore decoded, but neither KEYSTORE_PASSWORD nor KEY_PASSWORD opens it. The keystore was created with a different store password than the one stored in this repository."
+              exit 1
+            fi
           fi
-          ALIASES=$(keytool -list -keystore android/app/key.jks -storepass "$KEYSTORE_PASSWORD" 2>/dev/null \
+          ALIASES=$(keytool -list -keystore android/app/key.jks -storepass "$STOREPASS" 2>/dev/null \
                     | sed -n 's/^\([^,]*\),.*/\1/p' | tr -d ' ' | paste -sd, -)
           case ",${ALIASES}," in
-            *",${KEY_ALIAS},"*) : ;;
+            *",${ALIAS},"*) : ;;
             *)
-              echo "::error::KEY_ALIAS='${KEY_ALIAS}' is not in this keystore. Aliases present: ${ALIASES:-<none>}. Set KEY_ALIAS to one of those."
+              echo "::error::KEY_ALIAS='${ALIAS}' is not in this keystore. Aliases present: ${ALIASES:-<none>}. Set KEY_ALIAS to one of those."
               exit 1
               ;;
           esac
-          if ! keytool -list -keystore android/app/key.jks -storepass "$KEYSTORE_PASSWORD" \
-                 -alias "$KEY_ALIAS" >/dev/null 2>&1; then
-            echo "::error::Alias '${KEY_ALIAS}' exists but cannot be read with KEYSTORE_PASSWORD."
+          if ! keytool -list -keystore android/app/key.jks -storepass "$STOREPASS" \
+                 -alias "$ALIAS" >/dev/null 2>&1; then
+            echo "::error::Alias '${ALIAS}' exists but cannot be read with the store password."
             exit 1
           fi
-          echo "keystore OK (${SIZE} bytes, magic ${MAGIC}, alias ${KEY_ALIAS} present)"
+          # Persist the values that were actually validated: the build step must sign
+          # with the same credentials (normalised, and possibly un-swapped), otherwise
+          # Gradle fails after this step has already declared success.
+          {
+            echo "RESOLVED_KEYSTORE_PASSWORD=${STOREPASS}"
+            echo "RESOLVED_KEY_ALIAS=${ALIAS}"
+            echo "RESOLVED_KEY_PASSWORD=${KEYPASS:-$STOREPASS}"
+          } >> "$GITHUB_ENV"
+          echo "keystore OK (${SIZE} bytes, magic ${MAGIC}, alias ${ALIAS} present)"
 
       - name: build android release artifacts (APK + AAB)
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ env.RESOLVED_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ env.RESOLVED_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ env.RESOLVED_KEY_PASSWORD }}
           VERSION_MAJOR: ${{ steps.version.outputs.major }}
           VERSION_MINOR: ${{ steps.version.outputs.minor }}
           VERSION_PATCH: ${{ steps.version.outputs.patch }}
