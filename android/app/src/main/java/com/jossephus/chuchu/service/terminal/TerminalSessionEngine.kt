@@ -20,6 +20,7 @@ import com.jossephus.chuchu.service.ssh.HostKeyStore
 import com.jossephus.chuchu.service.ssh.NativeSshService
 import com.jossephus.chuchu.service.ssh.TailscaleStatusChecker
 import java.util.concurrent.Executors
+import java.util.concurrent.locks.ReentrantLock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,37 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+
+// Read-loop poll cadence tiers. Kept as pure top-level constants/functions so
+// the policy is testable on a plain JVM without an engine instance.
+const val READ_ACTIVE_WINDOW_MS: Long = 50L
+const val READ_NEAR_IDLE_WINDOW_MS: Long = 500L
+const val READ_IDLE_WINDOW_MS: Long = 3_000L
+const val MIN_READ_DELAY_MS: Long = 2L
+const val NEAR_IDLE_READ_DELAY_MS: Long = 8L
+const val IDLE_READ_DELAY_MS: Long = 24L
+const val MAX_READ_DELAY_MS: Long = 32L
+
+/**
+ * How long after local input the session is treated as "expecting echo": the
+ * read loop keeps polling at [MIN_READ_DELAY_MS] during this window so the
+ * first echoed byte after an idle period is not delayed by the idle tier.
+ */
+const val INPUT_ECHO_WINDOW_MS: Long = 250L
+
+/**
+ * Read-loop poll interval as a function of how long the session has been idle:
+ * [MIN_READ_DELAY_MS] while data is flowing (or right after local input),
+ * ramping to [MAX_READ_DELAY_MS] once quiet so an idle terminal stops spinning.
+ */
+fun terminalReadDelayMs(idleForMs: Long, sinceLastInputMs: Long): Long =
+    when {
+        sinceLastInputMs < INPUT_ECHO_WINDOW_MS -> MIN_READ_DELAY_MS
+        idleForMs < READ_ACTIVE_WINDOW_MS -> MIN_READ_DELAY_MS
+        idleForMs < READ_NEAR_IDLE_WINDOW_MS -> NEAR_IDLE_READ_DELAY_MS
+        idleForMs < READ_IDLE_WINDOW_MS -> IDLE_READ_DELAY_MS
+        else -> MAX_READ_DELAY_MS
+    }
 
 enum class SessionStatus {
     Disconnected,
@@ -102,28 +134,69 @@ class TerminalSessionEngine(
         }
     }
 
+    // Two single-thread lanes keep blocking native work off the main thread
+    // without letting a sleeping/polling read loop sit in front of keystrokes:
+    // `dispatcher` owns session lifecycle, input writes and snapshot emission;
+    // `readDispatcher` owns the SSH/mosh/local-shell read loop, which delays
+    // between polls and blocks in native reads.
     private val dispatcher: ExecutorCoroutineDispatcher =
         Executors.newSingleThreadExecutor { r ->
                 Thread(r, "terminal-session").apply { isDaemon = true }
             }
             .asCoroutineDispatcher()
+    private val readDispatcher: ExecutorCoroutineDispatcher =
+        Executors.newSingleThreadExecutor { r ->
+                Thread(r, "terminal-read").apply { isDaemon = true }
+            }
+            .asCoroutineDispatcher()
     @Volatile private var disposed = false
+
+    // Native state (libssh2 session, ghostty terminal, local-shell fd) is not
+    // thread-safe, and the two lanes above must not touch it concurrently.
+    // This lock serialises individual native interactions only — never across a
+    // delay or a snapshot cycle — so neither lane can starve the other. It is
+    // reentrant because helpers such as flushPtyWrites/requestSnapshot nest.
+    private val nativeLock = ReentrantLock()
+
+    private inline fun <T> withNativeLock(block: () -> T): T {
+        nativeLock.lock()
+        try {
+            return block()
+        } finally {
+            nativeLock.unlock()
+        }
+    }
 
     private val bridge = GhosttyBridge()
     private val nativeSsh = NativeSshService(hostKeyPolicy = ::verifyHostKey)
     private val moshService = NativeMoshService()
 
-    private var handle: Long = 0L
+    // handle/geometry are read from both lanes; writes stay on the session lane.
+    @Volatile private var handle: Long = 0L
     private var readJob: Job? = null
-    private var cols = 80
-    private var rows = 24
-    private var screenWidth = 0
-    private var screenHeight = 0
-    private var cellWidth = 1
-    private var cellHeight = 1
-    private var lastSnapshotAtMs = 0L
-    private var snapshotScheduled = false
-    private val snapshotIntervalMs = 16L
+    // Bumped whenever the native session is replaced, so a read loop still
+    // parked inside a native read cannot consume bytes from the next session
+    // once the lanes are decoupled.
+    @Volatile private var readLoopGeneration = 0
+    @Volatile private var cols = 80
+    @Volatile private var rows = 24
+    @Volatile private var screenWidth = 0
+    @Volatile private var screenHeight = 0
+    @Volatile private var cellWidth = 1
+    @Volatile private var cellHeight = 1
+    private val snapshotScheduler =
+        SnapshotScheduler(
+            intervalMs = SNAPSHOT_MIN_INTERVAL_MS,
+            now = System::currentTimeMillis,
+            scheduleDelayed = { delayMs, block ->
+                scope.launch(dispatcher) {
+                    delay(delayMs)
+                    block()
+                }
+            },
+            emit = { dispatchSnapshotEmission() },
+        )
+    private var snapshotRetryCount = 0
     private var title: String? = null
     private var pwd: String? = null
     private var images: List<ImagePlacement> = emptyList()
@@ -132,6 +205,7 @@ class TerminalSessionEngine(
     private var lastConnectionParams: ConnectionParams? = null
     private var reconnectJob: Job? = null
     private var disconnectRequested = false
+    @Volatile private var lastInputAtMs = 0L
 
 
     private val nativeVersion =
@@ -289,12 +363,22 @@ class TerminalSessionEngine(
     fun writeKey(key: Int, codepoint: Int, mods: Int, action: Int, utf8: String? = null) {
         scope.launch(dispatcher) {
             if (handle == 0L) return@launch
-            val encoded =
-                bridge.nativeEncodeKey(handle, key, codepoint, mods, action, utf8) ?: return@launch
-            if (encoded.isEmpty()) return@launch
-            try {
-                writeRemote(encoded)
-            } catch (_: Exception) {}
+            val wrote =
+                runCatching {
+                    withNativeLock {
+                        val encoded =
+                            bridge.nativeEncodeKey(handle, key, codepoint, mods, action, utf8)
+                        if (encoded == null || encoded.isEmpty()) {
+                            false
+                        } else {
+                            writeRemote(encoded)
+                            true
+                        }
+                    }
+                }.getOrDefault(false)
+            // Repaint from local state without waiting for the remote echo; the
+            // scheduler coalesces a whole burst of keys into one snapshot.
+            if (wrote) requestSnapshot()
         }
     }
 
@@ -302,9 +386,12 @@ class TerminalSessionEngine(
         scope.launch(dispatcher) {
             if (handle == 0L) return@launch
             if (text.isEmpty()) return@launch
-            try {
-                writeRemote(text.toByteArray(Charsets.UTF_8))
-            } catch (_: Exception) {}
+            val wrote =
+                runCatching {
+                    withNativeLock { writeRemote(text.toByteArray(Charsets.UTF_8)) }
+                    true
+                }.getOrDefault(false)
+            if (wrote) requestSnapshot()
         }
     }
 
@@ -312,11 +399,19 @@ class TerminalSessionEngine(
         scope.launch(dispatcher) {
             if (handle == 0L) return@launch
             if (text.isEmpty()) return@launch
-            val encoded = bridge.nativeEncodePaste(handle, text) ?: return@launch
-            if (encoded.isEmpty()) return@launch
-            try {
-                writeRemote(encoded)
-            } catch (_: Exception) {}
+            val wrote =
+                runCatching {
+                    withNativeLock {
+                        val encoded = bridge.nativeEncodePaste(handle, text)
+                        if (encoded == null || encoded.isEmpty()) {
+                            false
+                        } else {
+                            writeRemote(encoded)
+                            true
+                        }
+                    }
+                }.getOrDefault(false)
+            if (wrote) requestSnapshot()
         }
     }
 
@@ -325,7 +420,7 @@ class TerminalSessionEngine(
         pendingColorScheme = scheme
         scope.launch(dispatcher) {
             if (handle == 0L) return@launch
-            bridge.nativeSetColorScheme(handle, scheme)
+            withNativeLock { bridge.nativeSetColorScheme(handle, scheme) }
         }
     }
 
@@ -333,7 +428,7 @@ class TerminalSessionEngine(
         pendingDefaultColors = DefaultColors(fg, bg, cursor, palette)
         scope.launch(dispatcher) {
             if (handle == 0L) return@launch
-            bridge.nativeSetDefaultColors(handle, fg, bg, cursor, palette)
+            withNativeLock { bridge.nativeSetDefaultColors(handle, fg, bg, cursor, palette) }
             requestSnapshot(force = true)
         }
     }
@@ -341,11 +436,12 @@ class TerminalSessionEngine(
     fun sendFocusEvent(focused: Boolean) {
         scope.launch(dispatcher) {
             if (handle == 0L) return@launch
-            val encoded = bridge.nativeEncodeFocus(handle, focused) ?: return@launch
-            if (encoded.isEmpty()) return@launch
-            try {
-                writeRemote(encoded)
-            } catch (_: Exception) {}
+            runCatching {
+                withNativeLock {
+                    val encoded = bridge.nativeEncodeFocus(handle, focused)
+                    if (encoded != null && encoded.isNotEmpty()) writeRemote(encoded)
+                }
+            }
         }
     }
 
@@ -360,21 +456,22 @@ class TerminalSessionEngine(
     ) {
         scope.launch(dispatcher) {
             if (handle == 0L) return@launch
-            val encoded =
-                bridge.nativeEncodeMouse(
-                    handle,
-                    action,
-                    button,
-                    mods,
-                    x,
-                    y,
-                    anyButtonPressed,
-                    trackLastCell,
-                ) ?: return@launch
-            if (encoded.isEmpty()) return@launch
-            try {
-                writeRemote(encoded)
-            } catch (_: Exception) {}
+            runCatching {
+                withNativeLock {
+                    val encoded =
+                        bridge.nativeEncodeMouse(
+                            handle,
+                            action,
+                            button,
+                            mods,
+                            x,
+                            y,
+                            anyButtonPressed,
+                            trackLastCell,
+                        )
+                    if (encoded != null && encoded.isNotEmpty()) writeRemote(encoded)
+                }
+            }
         }
     }
 
@@ -397,22 +494,24 @@ class TerminalSessionEngine(
                 screenWidth = newScreenWidth
                 screenHeight = newScreenHeight
                 if (handle != 0L) {
-                    bridge.nativeResize(handle, cols, rows, cellWidth, cellHeight)
-                    // Flush pty output from the resize (e.g. the DEC 2048 in-band
-                    // size report) so Textual-based TUIs detect the resize.
-                    flushPtyWrites()
-                    bridge.nativeSetMouseEncodingSize(
-                        handle,
-                        screenWidth,
-                        screenHeight,
-                        cellWidth,
-                        cellHeight,
-                        0,
-                        0,
-                        0,
-                        0,
-                    )
-                    resizeRemote(cols, rows, ptyWidthPx(), ptyHeightPx())
+                    withNativeLock {
+                        bridge.nativeResize(handle, cols, rows, cellWidth, cellHeight)
+                        // Flush pty output from the resize (e.g. the DEC 2048 in-band
+                        // size report) so Textual-based TUIs detect the resize.
+                        flushPtyWrites()
+                        bridge.nativeSetMouseEncodingSize(
+                            handle,
+                            screenWidth,
+                            screenHeight,
+                            cellWidth,
+                            cellHeight,
+                            0,
+                            0,
+                            0,
+                            0,
+                        )
+                        resizeRemote(cols, rows, ptyWidthPx(), ptyHeightPx())
+                    }
                     requestSnapshot(force = true)
                 }
             } catch (e: Exception) {
@@ -428,7 +527,7 @@ class TerminalSessionEngine(
                     if (transport == Transport.Mosh) {
                         readJob?.cancel()
                         readJob = null
-                        moshService.close()
+                        withNativeLock { moshService.close() }
                     }
                     _state.value =
                         _state.value.copy(
@@ -445,8 +544,10 @@ class TerminalSessionEngine(
             if (handle == 0L || delta == 0) {
                 return@launch
             }
-            bridge.nativeScroll(handle, delta, x, y)
-            flushPtyWrites()
+            withNativeLock {
+                bridge.nativeScroll(handle, delta, x, y)
+                flushPtyWrites()
+            }
             requestSnapshot(force = true)
         }
     }
@@ -454,32 +555,35 @@ class TerminalSessionEngine(
     fun scrollToActive() {
         scope.launch(dispatcher) {
             if (handle == 0L) return@launch
-            bridge.nativeScrollToActive(handle)
+            withNativeLock { bridge.nativeScrollToActive(handle) }
+            // Coalesced by the scheduler: never more than one snapshot per frame.
             requestSnapshot(force = true)
         }
     }
 
     suspend fun sftpListDirectory(path: String): List<String> =
-        withContext(dispatcher) { nativeSsh.sftpListDirectory(path) }
+        withContext(dispatcher) { withNativeLock { nativeSsh.sftpListDirectory(path) } }
 
     suspend fun sftpRealpath(path: String): String =
-        withContext(dispatcher) { nativeSsh.sftpRealpath(path) }
+        withContext(dispatcher) { withNativeLock { nativeSsh.sftpRealpath(path) } }
 
     suspend fun sftpOpenWrite(path: String) =
-        withContext(dispatcher) { nativeSsh.sftpOpenWrite(path) }
+        withContext(dispatcher) { withNativeLock { nativeSsh.sftpOpenWrite(path) } }
 
     suspend fun sftpWriteChunk(data: ByteArray): Int =
-        withContext(dispatcher) { nativeSsh.sftpWriteChunk(data) }
+        withContext(dispatcher) { withNativeLock { nativeSsh.sftpWriteChunk(data) } }
 
     suspend fun sftpCloseWrite() =
-        withContext(dispatcher) { nativeSsh.sftpCloseWrite() }
+        withContext(dispatcher) { withNativeLock { nativeSsh.sftpCloseWrite() } }
 
     suspend fun sftpReadFile(path: String, maxBytes: Int): ByteArray =
-        withContext(dispatcher) { nativeSsh.sftpReadFile(path, maxBytes) }
+        withContext(dispatcher) { withNativeLock { nativeSsh.sftpReadFile(path, maxBytes) } }
 
     suspend fun sftpDelete(path: String, isDirectory: Boolean) =
         withContext(dispatcher) {
-            if (isDirectory) nativeSsh.sftpDeleteDirectory(path) else nativeSsh.sftpDeleteFile(path)
+            withNativeLock {
+                if (isDirectory) nativeSsh.sftpDeleteDirectory(path) else nativeSsh.sftpDeleteFile(path)
+            }
         }
 
     suspend fun checkMultiplexerAvailability(spec: TabSpec): MultiplexerAvailability =
@@ -584,14 +688,17 @@ class TerminalSessionEngine(
         scope.launch(dispatcher) {
             readJob?.cancel()
             readJob = null
-            nativeSsh.close()
-            moshService.close()
-            localShellService.close()
-            if (handle != 0L) {
-                bridge.nativeDestroy(handle)
-                handle = 0L
+            withNativeLock {
+                nativeSsh.close()
+                moshService.close()
+                localShellService.close()
+                if (handle != 0L) {
+                    bridge.nativeDestroy(handle)
+                    handle = 0L
+                }
             }
-            snapshotScheduled = false
+            snapshotScheduler.reset()
+            snapshotRetryCount = 0
             title = null
             pwd = null
             images = emptyList()
@@ -608,7 +715,9 @@ class TerminalSessionEngine(
         if (disposed) return
         disposed = true
         disconnect()
+        readJob?.cancel()
         dispatcher.close()
+        readDispatcher.close()
     }
 
     private fun cancelHostKeyPrompt() {
@@ -656,16 +765,17 @@ class TerminalSessionEngine(
     }
 
     private fun startReadLoop() {
+        val generation = readLoopGeneration
         readJob =
-            scope.launch(dispatcher) {
+            scope.launch(readDispatcher) {
                 val transport = lastConnectionParams?.transport
                 var failed = false
                 var moshFailureCode: Int? = null
                 try {
                     when (transport) {
-                        Transport.Mosh -> moshFailureCode = startMoshReadLoop()
-                        Transport.LocalShell -> startLocalShellReadLoop()
-                        else -> startSshReadLoop()
+                        Transport.Mosh -> moshFailureCode = startMoshReadLoop(generation)
+                        Transport.LocalShell -> startLocalShellReadLoop(generation)
+                        else -> startSshReadLoop(generation)
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -682,13 +792,13 @@ class TerminalSessionEngine(
                 }
                 when (readLoopExitAction(transport)) {
                     ReadLoopExitAction.Disconnect -> {
-                        localShellService.close()
+                        withNativeLock { localShellService.close() }
                         if (!disconnectRequested && !failed) {
                             _state.value = _state.value.copy(status = SessionStatus.Disconnected)
                         }
                     }
                     ReadLoopExitAction.RequireManualReconnect -> {
-                        moshService.close()
+                        withNativeLock { moshService.close() }
                         if (!disconnectRequested) {
                             val failure = moshFailureCode?.let { " (failure code $it)" }.orEmpty()
                             _state.value =
@@ -703,11 +813,13 @@ class TerminalSessionEngine(
             }
     }
 
-    private suspend fun startSshReadLoop() {
+    private suspend fun startSshReadLoop(generation: Int) {
         val buf = ByteArray(65536)
         var lastActivityMs = System.currentTimeMillis()
-        while (currentCoroutineContext().isActive) {
-            val chunk = nativeSsh.read(buf.size)
+        while (currentCoroutineContext().isActive && generation == readLoopGeneration) {
+            val chunk = withNativeLock { nativeSsh.read(buf.size) }
+            // The session may have been replaced while this read was blocked.
+            if (generation != readLoopGeneration) break
             if (chunk == null) {
                 break
             }
@@ -722,11 +834,12 @@ class TerminalSessionEngine(
         }
     }
 
-    private suspend fun startLocalShellReadLoop() {
+    private suspend fun startLocalShellReadLoop(generation: Int) {
         val buf = ByteArray(65536)
         var lastActivityMs = System.currentTimeMillis()
-        while (currentCoroutineContext().isActive) {
-            val chunk = localShellService.read(buf.size)
+        while (currentCoroutineContext().isActive && generation == readLoopGeneration) {
+            val chunk = withNativeLock { localShellService.read(buf.size) }
+            if (generation != readLoopGeneration) break
             if (chunk == null) {
                 break
             }
@@ -741,35 +854,37 @@ class TerminalSessionEngine(
 
     private fun feedRemoteChunk(chunk: ByteArray) {
         if (handle == 0L) return
-        val wasImageLoading = bridge.nativeIsImageLoading(handle)
-        flushPtyWrites()
-        bridge.nativeWriteRemote(handle, chunk)
-        flushPtyWrites()
-        val isImageLoading = bridge.nativeIsImageLoading(handle)
-        when {
-            wasImageLoading && !isImageLoading -> {
-                requestSnapshot(force = true)
+        withNativeLock {
+            val wasImageLoading = bridge.nativeIsImageLoading(handle)
+            flushPtyWrites()
+            bridge.nativeWriteRemote(handle, chunk)
+            flushPtyWrites()
+            val isImageLoading = bridge.nativeIsImageLoading(handle)
+            when {
+                wasImageLoading && !isImageLoading -> {
+                    requestSnapshot(force = true)
+                }
+                !isImageLoading -> requestSnapshot()
             }
-            !isImageLoading -> requestSnapshot()
         }
     }
 
-    private suspend fun startMoshReadLoop(): Int? {
+    private suspend fun startMoshReadLoop(generation: Int): Int? {
         Log.d("TerminalSession", "MOSH: read loop started")
         var loopCount = 0
         var lastActivityMs = System.currentTimeMillis()
         var failureCode: Int? = null
-        while (currentCoroutineContext().isActive) {
+        while (currentCoroutineContext().isActive && generation == readLoopGeneration) {
             loopCount++
 
             // Drive retransmissions, acks, heartbeats, timeout checks
-            val tickOk = moshService.maintenanceTick()
+            val tickOk = withNativeLock { moshService.maintenanceTick() }
             if (!tickOk) {
                 Log.w("TerminalSession", "MOSH: maintenanceTick returned false")
             }
 
             // Drive the UDP socket (send queued datagrams, receive inbound)
-            val pumpOk = moshService.pumpNetwork()
+            val pumpOk = withNativeLock { moshService.pumpNetwork() }
             if (!pumpOk) {
                 Log.w("TerminalSession", "MOSH: pumpNetwork returned false")
             }
@@ -777,7 +892,7 @@ class TerminalSessionEngine(
             // Drain all available output events
             var hadEvent = false
             while (true) {
-                val event = moshService.pollOutput() ?: break
+                val event = withNativeLock { moshService.pollOutput() } ?: break
                 hadEvent = true
                 when (event.eventType) {
                     MoshEventType.HostBytes.code -> {
@@ -789,7 +904,9 @@ class TerminalSessionEngine(
                         if (event.cols > 0 && event.rows > 0) {
                             cols = event.cols
                             rows = event.rows
-                            bridge.nativeResize(handle, cols, rows, cellWidth, cellHeight)
+                            withNativeLock {
+                                bridge.nativeResize(handle, cols, rows, cellWidth, cellHeight)
+                            }
                         }
                     }
                     MoshEventType.EchoAck.code -> Unit
@@ -811,7 +928,7 @@ class TerminalSessionEngine(
             }
 
             // Check session health
-            val runtime = moshService.pollState()
+            val runtime = withNativeLock { moshService.pollState() }
             if (runtime != null) {
                 if (runtime.state == MoshState.Failed.code) {
                     failureCode = runtime.lastFailureCode
@@ -829,16 +946,23 @@ class TerminalSessionEngine(
     }
 
     private suspend fun establishConnection(params: ConnectionParams, username: String) {
-        if (handle != 0L) {
-            bridge.nativeDestroy(handle)
-            handle = 0L
+        readLoopGeneration += 1
+        readJob?.cancel()
+        readJob = null
+        withNativeLock {
+            if (handle != 0L) {
+                bridge.nativeDestroy(handle)
+                handle = 0L
+            }
+            nativeSsh.close()
+            moshService.close()
+            localShellService.close()
+            handle = bridge.nativeCreate(cols, rows, 1000)
+            applyTerminalOptions()
         }
-        nativeSsh.close()
-        moshService.close()
-        localShellService.close()
-        handle = bridge.nativeCreate(cols, rows, 1000)
-        applyTerminalOptions()
 
+        // Connection setup blocks in native I/O for seconds; keep it outside the
+        // lock so input written to the old session is never stalled behind it.
         when (params.transport) {
             Transport.Mosh -> establishMoshConnection(params, username)
             Transport.LocalShell -> establishLocalShellConnection()
@@ -847,51 +971,61 @@ class TerminalSessionEngine(
     }
 
     private fun establishLocalShellConnection() {
-        localShellService.start(cols, rows, screenWidth, screenHeight)
+        withNativeLock { localShellService.start(cols, rows, screenWidth, screenHeight) }
     }
 
     private fun establishSshConnection(params: ConnectionParams, username: String) {
         check(nativeSsh.isAvailable()) { "Native SSH unavailable" }
-        nativeSsh.connect(
-            host = params.host,
-            port = params.port,
-            username = username,
-            authMethod = params.authMethod,
-            password = if (params.authMethod == AuthMethod.Password) params.password else "",
-            publicKeyOpenSsh = params.publicKeyOpenSsh,
-            privateKeyPem = params.privateKeyPem,
-            keyPassphrase = params.keyPassphrase,
-        )
+        // Each native call takes the lock on its own: a read still in flight on
+        // the old session drains first, but the lock is never held across the
+        // whole (multi-second) handshake.
+        withNativeLock {
+            nativeSsh.connect(
+                host = params.host,
+                port = params.port,
+                username = username,
+                authMethod = params.authMethod,
+                password = if (params.authMethod == AuthMethod.Password) params.password else "",
+                publicKeyOpenSsh = params.publicKeyOpenSsh,
+                privateKeyPem = params.privateKeyPem,
+                keyPassphrase = params.keyPassphrase,
+            )
+        }
         val startupCommand = params.multiplexerStartupCommand()?.trim().orEmpty()
         if (startupCommand.isNotEmpty()) {
-            nativeSsh.openExecPty(startupCommand, cols, rows, ptyWidthPx(), ptyHeightPx())
+            withNativeLock {
+                nativeSsh.openExecPty(startupCommand, cols, rows, ptyWidthPx(), ptyHeightPx())
+            }
         } else {
-            nativeSsh.openShell(cols, rows, ptyWidthPx(), ptyHeightPx())
+            withNativeLock { nativeSsh.openShell(cols, rows, ptyWidthPx(), ptyHeightPx()) }
         }
     }
 
     private suspend fun establishMoshConnection(params: ConnectionParams, username: String) {
         Log.d("TerminalSession", "MOSH: Phase 1 — SSH bootstrap start")
         check(nativeSsh.isAvailable()) { "Native SSH unavailable for mosh bootstrap" }
-        nativeSsh.connect(
-            host = params.host,
-            port = params.port,
-            username = username,
-            authMethod = params.authMethod,
-            password = if (params.authMethod == AuthMethod.Password) params.password else "",
-            publicKeyOpenSsh = params.publicKeyOpenSsh,
-            privateKeyPem = params.privateKeyPem,
-            keyPassphrase = params.keyPassphrase,
-        )
+        withNativeLock {
+            nativeSsh.connect(
+                host = params.host,
+                port = params.port,
+                username = username,
+                authMethod = params.authMethod,
+                password = if (params.authMethod == AuthMethod.Password) params.password else "",
+                publicKeyOpenSsh = params.publicKeyOpenSsh,
+                privateKeyPem = params.privateKeyPem,
+                keyPassphrase = params.keyPassphrase,
+            )
+        }
         // Use exec channel to bypass shell init noise and MOTD.
         // Falls back to shell if the remote server doesn't support exec.
         val moshCommand = MoshReconnectPolicy.bootstrapCommand()
-        val execOpened = runCatching { nativeSsh.openExec(moshCommand) }.getOrDefault(false)
+        val execOpened =
+            runCatching { withNativeLock { nativeSsh.openExec(moshCommand) } }.getOrDefault(false)
         if (!execOpened) {
             Log.w("TerminalSession", "MOSH: exec channel unavailable, falling back to shell")
-            nativeSsh.openShell(cols, rows, ptyWidthPx(), ptyHeightPx())
+            withNativeLock { nativeSsh.openShell(cols, rows, ptyWidthPx(), ptyHeightPx()) }
             val fallback = "$moshCommand\n"
-            nativeSsh.write(fallback.toByteArray(Charsets.UTF_8))
+            withNativeLock { nativeSsh.write(fallback.toByteArray(Charsets.UTF_8)) }
         }
         Log.d(
             "TerminalSession",
@@ -905,7 +1039,7 @@ class TerminalSessionEngine(
         suspend fun readBootstrapWindow(timeoutMs: Long): Boolean {
             val deadline = System.currentTimeMillis() + timeoutMs
             while (System.currentTimeMillis() < deadline) {
-                val chunk = nativeSsh.read(4096)
+                val chunk = withNativeLock { nativeSsh.read(4096) }
                 if (chunk != null && chunk.isNotEmpty()) {
                     val text = String(chunk, Charsets.UTF_8)
                     outputBuffer.append(text)
@@ -915,7 +1049,7 @@ class TerminalSessionEngine(
                             "TerminalSession",
                             "MOSH: Parsed endpoint host=${result.endpoint.host} port=${result.endpoint.port}",
                         )
-                        nativeSsh.close()
+                        withNativeLock { nativeSsh.close() }
                         val configJson =
                             JSONObject()
                                 .apply {
@@ -927,19 +1061,20 @@ class TerminalSessionEngine(
                                     put("useNetworkCrypto", true)
                                 }
                                 .toString()
-                        if (!moshService.create(configJson)) {
+                        val created = withNativeLock { moshService.create(configJson) }
+                        if (!created) {
                             throw IllegalStateException("Failed to create mosh client")
                         }
                         Log.d("TerminalSession", "MOSH: mosh client created, starting...")
-                        if (!moshService.start()) {
+                        if (!withNativeLock { moshService.start() }) {
                             throw IllegalStateException("Failed to start mosh client")
                         }
                         Log.d("TerminalSession", "MOSH: mosh client started, resizing $cols x $rows")
-                        moshService.resize(cols, rows)
+                        withNativeLock { moshService.resize(cols, rows) }
                         return true
                     }
                 } else {
-                    if (execOpened && nativeSsh.isChannelEof()) {
+                    if (execOpened && withNativeLock { nativeSsh.isChannelEof() }) {
                         Log.d("TerminalSession", "MOSH: exec channel EOF reached")
                         return false
                     }
@@ -950,13 +1085,18 @@ class TerminalSessionEngine(
         }
 
         var found = readBootstrapWindow(timeoutMs = 10_000)
-        if (!found && execOpened && outputBuffer.isEmpty() && !nativeSsh.isChannelEof()) {
+        if (
+            !found &&
+                execOpened &&
+                outputBuffer.isEmpty() &&
+                !withNativeLock { nativeSsh.isChannelEof() }
+        ) {
             Log.w("TerminalSession", "MOSH: bootstrap still running after 10s with no output; extending window by 15s")
             found = readBootstrapWindow(timeoutMs = 15_000)
         }
         if (!found) {
-            val eofBeforeClose = if (execOpened) nativeSsh.isChannelEof() else true
-            nativeSsh.close()
+            val eofBeforeClose = if (execOpened) withNativeLock { nativeSsh.isChannelEof() } else true
+            withNativeLock { nativeSsh.close() }
             val rawOutput = outputBuffer.toString()
             val reason =
                 if (rawOutput.isBlank()) {
@@ -1139,10 +1279,16 @@ class TerminalSessionEngine(
     }
 
     private fun writeRemote(data: ByteArray) {
-        when (lastConnectionParams?.transport) {
-            Transport.Mosh -> moshService.sendInput(data)
-            Transport.LocalShell -> localShellService.write(data)
-            else -> nativeSsh.write(data)
+        // Any local write means an echo may be imminent: the read loop drops to
+        // its fastest poll for the next INPUT_ECHO_WINDOW_MS so the first echoed
+        // byte after an idle period is not stuck behind the idle tier.
+        lastInputAtMs = System.currentTimeMillis()
+        withNativeLock {
+            when (lastConnectionParams?.transport) {
+                Transport.Mosh -> moshService.sendInput(data)
+                Transport.LocalShell -> localShellService.write(data)
+                else -> nativeSsh.write(data)
+            }
         }
     }
 
@@ -1176,11 +1322,11 @@ class TerminalSessionEngine(
         }
     }
 
-    private fun flushPtyWrites() {
-        if (handle == 0L) return
+    private fun flushPtyWrites() = withNativeLock {
+        if (handle == 0L) return@withNativeLock
         repeat(8) {
             val ptyWrites = bridge.nativeDrainPtyWrites(handle)
-            if (ptyWrites.isEmpty()) return
+            if (ptyWrites.isEmpty()) return@withNativeLock
             try {
                 writeRemote(ptyWrites)
             } catch (e: Exception) {
@@ -1192,7 +1338,7 @@ class TerminalSessionEngine(
                             error = "Connection lost: ${e.message}",
                         )
                 }
-                return
+                return@withNativeLock
             }
         }
     }
@@ -1215,83 +1361,83 @@ class TerminalSessionEngine(
         }
     }
 
-    private companion object {
-        // Idle thresholds and the poll delay for each tier.
-        private const val ACTIVE_WINDOW_MS = 50L
-        private const val NEAR_IDLE_WINDOW_MS = 500L
-        private const val IDLE_WINDOW_MS = 3_000L
-        private const val MIN_READ_DELAY_MS = 2L
-        private const val NEAR_IDLE_DELAY_MS = 8L
-        private const val IDLE_DELAY_MS = 24L
-        private const val MAX_READ_DELAY_MS = 64L
-    }
-
-    // Read-loop poll interval as a function of how long the session has been idle:
-    // MIN while data is flowing (snappy echo), ramping to MAX once quiet so an idle
-    // terminal stops spinning. The first byte after idle restores MIN within one
-    // MAX interval.
+    // Read-loop poll interval surfaced to the loop: idle time in the terminal
+    // plus time since local input, so the first echo after typing is polled at
+    // MIN even when the session has been quiet for a while.
     private fun idleReadDelayMs(idleForMs: Long): Long =
-        when {
-            idleForMs < ACTIVE_WINDOW_MS -> MIN_READ_DELAY_MS
-            idleForMs < NEAR_IDLE_WINDOW_MS -> NEAR_IDLE_DELAY_MS
-            idleForMs < IDLE_WINDOW_MS -> IDLE_DELAY_MS
-            else -> MAX_READ_DELAY_MS
-        }
+        terminalReadDelayMs(
+            idleForMs = idleForMs,
+            sinceLastInputMs = System.currentTimeMillis() - lastInputAtMs,
+        )
 
     private fun requestSnapshot(force: Boolean = false) {
         if (handle == 0L) return
-        val now = System.currentTimeMillis()
-        val elapsed = now - lastSnapshotAtMs
-        if (force || elapsed >= snapshotIntervalMs) {
-            snapshotScheduled = false
-            emitSnapshot()
-            lastSnapshotAtMs = now
+        snapshotScheduler.request(force)
+    }
+
+    /**
+     * Snapshot emission always runs on the session lane, never on the read
+     * lane: the read loop only publishes a request, so a slow native snapshot
+     * can never sit in front of the next keystroke.
+     */
+    private fun dispatchSnapshotEmission() {
+        scope.launch(dispatcher) { emitScheduledSnapshot() }
+    }
+
+    /**
+     * Entry point used by [snapshotScheduler]: emits and, on failure, gives the
+     * frame budget back and retries so the UI is not left with stale pixels.
+     */
+    private fun emitScheduledSnapshot() {
+        if (emitSnapshot()) {
+            snapshotRetryCount = 0
             return
         }
-        if (snapshotScheduled) return
-        snapshotScheduled = true
-        val waitMs = (snapshotIntervalMs - elapsed).coerceAtLeast(1L)
+        snapshotScheduler.markEmitFailed()
+        if (snapshotRetryCount >= MAX_SNAPSHOT_RETRIES) return
+        snapshotRetryCount += 1
         scope.launch(dispatcher) {
-            delay(waitMs)
-            snapshotScheduled = false
-            if (handle == 0L) return@launch
-            emitSnapshot()
-            lastSnapshotAtMs = System.currentTimeMillis()
+            delay(SNAPSHOT_MIN_INTERVAL_MS)
+            if (disposed || handle == 0L) return@launch
+            requestSnapshot()
         }
     }
 
-    private fun emitSnapshot() {
-        if (handle == 0L) return
-        try {
-            val raw = bridge.nativeSnapshot(handle)
-            val rawImages = bridge.nativeSnapshotImages(handle)
-            images = TerminalSnapshot.parseImages(rawImages)
-            val snap = TerminalSnapshot.fromByteBuffer(raw, images)
-            val nextTitle = bridge.nativePollTitle(handle)
-            val nextPwd = bridge.nativePollPwd(handle)
-            val nextClipboard = bridge.nativePollClipboard(handle)
-            val bellCount = bridge.nativeDrainBellCount(handle)
-            if (nextTitle != null) {
-                title = nextTitle
+    /** Returns false when the native snapshot failed and should be retried. */
+    private fun emitSnapshot(): Boolean =
+        withNativeLock {
+            if (handle == 0L) return@withNativeLock true
+            try {
+                val raw = bridge.nativeSnapshot(handle)
+                val rawImages = bridge.nativeSnapshotImages(handle)
+                images = TerminalSnapshot.parseImages(rawImages)
+                val snap = TerminalSnapshot.fromByteBuffer(raw, images)
+                val nextTitle = bridge.nativePollTitle(handle)
+                val nextPwd = bridge.nativePollPwd(handle)
+                val nextClipboard = bridge.nativePollClipboard(handle)
+                val bellCount = bridge.nativeDrainBellCount(handle)
+                if (nextTitle != null) {
+                    title = nextTitle
+                }
+                if (nextPwd != null) {
+                    pwd = nextPwd
+                }
+                if (nextClipboard != null) {
+                    publishClipboard(nextClipboard.toString(Charsets.UTF_8))
+                }
+                _state.value =
+                    _state.value.copy(
+                        snapshot = snap,
+                        title = title,
+                        pwd = pwd,
+                        bellCount = bellCount,
+                        nativeVersion = nativeVersion,
+                        handle = handle,
+                    )
+                true
+            } catch (e: Exception) {
+                Log.e("TerminalSession", "emitSnapshot failed", e)
+                false
             }
-            if (nextPwd != null) {
-                pwd = nextPwd
-            }
-            if (nextClipboard != null) {
-                publishClipboard(nextClipboard.toString(Charsets.UTF_8))
-            }
-            _state.value =
-                _state.value.copy(
-                    snapshot = snap,
-                    title = title,
-                    pwd = pwd,
-                    bellCount = bellCount,
-                    nativeVersion = nativeVersion,
-                    handle = handle,
-                )
-        } catch (e: Exception) {
-            Log.e("TerminalSession", "emitSnapshot failed", e)
         }
-    }
-
 }

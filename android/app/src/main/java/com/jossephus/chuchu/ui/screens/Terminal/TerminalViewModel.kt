@@ -699,12 +699,12 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         )
     }
 
+    // The key path never forces native scroll/snapshot work: the engine
+    // repaints from its own state at most once per frame, and the viewport is
+    // left where the user put it.
     fun onHardwareKey(key: Int, codepoint: Int, mods: Int, action: Int, charCode: Int = 0) {
         val hasNonTextModifier = mods and ((1 shl 1) or (1 shl 2) or (1 shl 3)) != 0
         val isRelease = action == GhosttyKeyAction.Release
-        if (!isRelease) {
-            sessionRepository.scrollToActive()
-        }
         val effectiveCodepoint = if (charCode > 0) charCode else codepoint
 
         val utf8 =
@@ -714,19 +714,16 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun onTextInput(text: String) {
-        sessionRepository.scrollToActive()
         sessionRepository.writeText(text)
     }
 
     fun onSpecialKeyInput(key: TerminalSpecialKey, mods: Int) {
-        sessionRepository.scrollToActive()
         sessionRepository.writeKey(key.engineKey, 0, mods, GhosttyKeyAction.Press)
         sessionRepository.writeKey(key.engineKey, 0, mods, GhosttyKeyAction.Release)
     }
 
     fun onPasteText(text: String) {
         if (text.isEmpty()) return
-        sessionRepository.scrollToActive()
         sessionRepository.writePaste(text)
     }
 
