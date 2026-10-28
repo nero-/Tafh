@@ -1,4 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/tafh_logo_fg"
-    android:gravity="fill" />
+<!--
+  Adaptive-icon foreground: the Tafh light-wave mark.
+
+  Geometry notes, because launcher masks are unforgiving:
+  - The adaptive canvas is 108dp but only the central 66dp circle is guaranteed
+    visible, so the glyph box is held to roughly 46x26dp centred on the canvas.
+  - The wave runs half a period past each edge of its box; the round caps are what
+    make it read as a wave rather than a squiggle at 24dp.
+  - A single stroked path (not filled outlines) keeps the curve smooth at every
+    density and lets the monochrome layer reuse the identical geometry.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M31.00,54.00 C31.16,53.58 31.64,52.29 31.96,51.46 C32.28,50.63 32.60,49.81 32.92,49.03 C33.24,48.24 33.56,47.48 33.88,46.78 C34.19,46.07 34.51,45.41 34.83,44.81 C35.15,44.21 35.47,43.66 35.79,43.19 C36.11,42.72 36.43,42.31 36.75,41.99 C37.07,41.67 37.39,41.41 37.71,41.25 C38.03,41.08 38.35,41.00 38.67,41.00 C38.99,41.00 39.31,41.08 39.62,41.25 C39.94,41.41 40.26,41.67 40.58,41.99 C40.90,42.31 41.22,42.72 41.54,43.19 C41.86,43.66 42.18,44.21 42.50,44.81 C42.82,45.41 43.14,46.07 43.46,46.78 C43.78,47.48 44.10,48.24 44.42,49.03 C44.74,49.81 45.06,50.63 45.38,51.46 C45.69,52.29 46.01,53.15 46.33,54.00 C46.65,54.85 46.97,55.71 47.29,56.54 C47.61,57.37 47.93,58.19 48.25,58.97 C48.57,59.76 48.89,60.52 49.21,61.22 C49.53,61.93 49.85,62.59 50.17,63.19 C50.49,63.79 50.81,64.34 51.12,64.81 C51.44,65.28 51.76,65.69 52.08,66.01 C52.40,66.33 52.72,66.59 53.04,66.75 C53.36,66.92 53.68,67.00 54.00,67.00 C54.32,67.00 54.64,66.92 54.96,66.75 C55.28,66.59 55.60,66.33 55.92,66.01 C56.24,65.69 56.56,65.28 56.88,64.81 C57.19,64.34 57.51,63.79 57.83,63.19 C58.15,62.59 58.47,61.93 58.79,61.22 C59.11,60.52 59.43,59.76 59.75,58.97 C60.07,58.19 60.39,57.37 60.71,56.54 C61.03,55.71 61.35,54.85 61.67,54.00 C61.99,53.15 62.31,52.29 62.62,51.46 C62.94,50.63 63.26,49.81 63.58,49.03 C63.90,48.24 64.22,47.48 64.54,46.78 C64.86,46.07 65.18,45.41 65.50,44.81 C65.82,44.21 66.14,43.66 66.46,43.19 C66.78,42.72 67.10,42.31 67.42,41.99 C67.74,41.67 68.06,41.41 68.38,41.25 C68.69,41.08 69.01,41.00 69.33,41.00 C69.65,41.00 69.97,41.08 70.29,41.25 C70.61,41.41 70.93,41.67 71.25,41.99 C71.57,42.31 71.89,42.72 72.21,43.19 C72.53,43.66 72.85,44.21 73.17,44.81 C73.49,45.41 73.81,46.07 74.12,46.78 C74.44,47.48 74.76,48.24 75.08,49.03 C75.40,49.81 75.72,50.63 76.04,51.46 C76.36,52.29 76.84,53.58 77.00,54.00"
+        android:strokeColor="#4FE3C1"
+        android:strokeWidth="9.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

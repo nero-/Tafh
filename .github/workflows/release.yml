@@ -104,12 +104,32 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           set -euo pipefail
-          if [ -z "${KEYSTORE_BASE64}" ]; then
-            echo "::error::KEYSTORE_BASE64 is not set for this repository. Add KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD (see README, 'Signing') and re-run."
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::error::KEYSTORE_BASE64 is not set. Add KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD (README, 'Signing')."
             exit 1
           fi
-          printf '%s' "${KEYSTORE_BASE64}" | base64 -d > android/app/key.jks
-          test -s android/app/key.jks
+          # Secrets are frequently pasted with wrapping, CRLF line endings or stray
+          # quotes; none of those are valid base64 and all of them fail to decode.
+          CLEAN="$(printf '%s' "${KEYSTORE_BASE64}" | tr -d '[:space:]' | tr -d '"' | tr -d "'")"
+          if ! printf '%s' "$CLEAN" | base64 -d > android/app/key.jks 2>/dev/null; then
+            echo "::error::KEYSTORE_BASE64 is not valid base64 after stripping whitespace/quotes. Re-create it with: base64 -w0 release.jks | tr -d '\n'"
+            exit 1
+          fi
+          SIZE=$(wc -c < android/app/key.jks)
+          if [ "$SIZE" -lt 512 ]; then
+            echo "::error::Decoded keystore is only ${SIZE} bytes, which cannot be a keystore. Did you paste a path instead of the file contents?"
+            exit 1
+          fi
+          # JKS (FEEDFEED) or PKCS12 (ASN.1 SEQUENCE, 0x30).
+          MAGIC=$(od -An -tx1 -N4 android/app/key.jks | tr -d ' \n')
+          case "$MAGIC" in
+            feedfeed*|30*) : ;;
+            *)
+              echo "::error::Decoded file does not look like a keystore (magic ${MAGIC})."
+              exit 1
+              ;;
+          esac
+          echo "keystore OK (${SIZE} bytes, magic ${MAGIC})"
 
       - name: build android release artifacts (APK + AAB)
         env:
