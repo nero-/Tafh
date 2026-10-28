@@ -2,8 +2,10 @@ package com.jossephus.chuchu.service.backup
 
 class NativeBackupBridge {
     companion object {
+        // The CHBK container lives in the Rust `chuchu-backup` crate, built as
+        // libchuchu_backup.so by cargo-ndk.
         private val loadError: Throwable? =
-            runCatching { System.loadLibrary("chuchu_jni") }.exceptionOrNull()
+            runCatching { System.loadLibrary("chuchu_backup") }.exceptionOrNull()
 
         const val STATUS_OK: Int = 0
         const val STATUS_FORMAT_ERROR: Int = 1

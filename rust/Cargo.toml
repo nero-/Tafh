@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["chuchu-backup"]
+
+# Android JNI libraries are loaded from a shared object, so size matters more
+# than peak throughput. `panic = "abort"` is also required: unwinding across the
+# FFI boundary would abort the JVM.
+[profile.release]
+opt-level = "z"
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

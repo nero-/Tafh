@@ -29,3 +29,6 @@ zig-src/.zig-cache/
 zig-src/zig-out/
 zig-out/
 .comview/
+
+# Rust
+/rust/target/
