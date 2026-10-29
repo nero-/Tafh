@@ -137,8 +137,18 @@ keytool -genkeypair -v -keystore release.jks -alias tafh \
   -keyalg RSA -keysize 4096 -validity 10000
 ```
 
-Verify the keystore against the credentials you are about to store, before
-adding the secrets (and whenever a release fails in "generate release key"):
+The reliable way to install the secrets is the helper, which validates the
+keystore first and then uploads it without any copy-paste (base64 pasted into a
+web form is where this normally goes wrong):
+
+```sh
+tools/set-signing-secrets.sh release.jks
+```
+
+It prompts for the store password, lists the aliases inside the file, picks the
+alias, proves the key is usable, and uploads all four secrets via `gh`.
+
+To check a keystore without uploading anything:
 
 ```sh
 tools/verify-signing.sh release.jks

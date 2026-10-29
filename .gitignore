@@ -21,6 +21,10 @@ scripts/
 # Android
 android/app/src/main/jniLibs/
 android/app/key.jks
+# Release signing material must never be committed (CI builds it from secrets).
+*.jks
+*.keystore
+release.jks
 /build
 /captures
 
