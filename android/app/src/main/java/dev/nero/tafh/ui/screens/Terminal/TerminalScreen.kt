@@ -1547,7 +1547,6 @@ fun TerminalScreen(
                                     )
                                 }
 
-
                                 val selState = selectionState
                                 if (selState != null) {
                                     val sel = selection
