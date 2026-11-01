@@ -85,8 +85,10 @@ import dev.nero.tafh.data.repository.SettingsRepository
 import dev.nero.tafh.model.AuthMethod
 import dev.nero.tafh.model.HostProfile
 import dev.nero.tafh.model.Transport
+import dev.nero.tafh.service.terminal.SessionState
 import dev.nero.tafh.service.terminal.SessionStatus
 import dev.nero.tafh.service.terminal.TabSpec
+import dev.nero.tafh.service.terminal.TerminalSnapshot
 import dev.nero.tafh.ui.components.ChuButton
 import dev.nero.tafh.ui.components.ChuButtonVariant
 import dev.nero.tafh.ui.components.ChuDialog
@@ -130,6 +132,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -218,6 +221,20 @@ private fun TerminalViewModel.dispatchTextWithModifierState(
             onTextInput(modifierState.applyToText(char.toString()))
         }
     }
+}
+
+/**
+ * Reads the per-frame snapshot in its own recompose scope, so only [content] (the canvas) follows
+ * the terminal's frame rate.
+ */
+@Composable
+private fun LatestSnapshot(
+    sessionState: StateFlow<SessionState>,
+    content: @Composable (TerminalSnapshot) -> Unit,
+) {
+    val state by sessionState.collectAsStateWithLifecycle()
+    val snapshot = state.snapshot ?: return
+    content(snapshot)
 }
 
 @Composable
@@ -436,7 +453,10 @@ fun TerminalScreen(
     modifier: Modifier = Modifier,
     openLocalShell: Boolean = false,
 ) {
-    val sessionState by vm.sessionState.collectAsStateWithLifecycle()
+    // Chrome only: the per-frame snapshot is read by LatestSnapshot around the canvas, so a
+    // keystroke echo repaints the grid without recomposing this whole screen.
+    val sessionChrome by vm.sessionChrome.collectAsStateWithLifecycle()
+    val sessionState = sessionChrome.state
     val hosts by vm.hosts.collectAsStateWithLifecycle()
     val tabs by vm.tabs.collectAsStateWithLifecycle()
     val activeTabId by vm.activeTabId.collectAsStateWithLifecycle()
@@ -985,8 +1005,7 @@ fun TerminalScreen(
         SessionStatus.Connected,
         SessionStatus.Reconnecting -> {
             val isReconnecting = sessionState.status == SessionStatus.Reconnecting
-            val snapshot = sessionState.snapshot
-            if (snapshot != null) {
+            if (sessionChrome.hasSnapshot) {
                 var modifierState by
                     rememberSaveable(stateSaver = ModifierStateSaver) {
                         mutableStateOf(ModifierState())
@@ -1487,32 +1506,34 @@ fun TerminalScreen(
                             }
                         } else {
                             Box(modifier = Modifier.weight(1f)) {
-                                TerminalCanvas(
-                                    snapshot = snapshot,
-                                    fontSizeSp = terminalFontSizeSp,
-                                    minFontSizeSp = SettingsRepository.MIN_TERMINAL_FONT_SIZE,
-                                    maxFontSizeSp = SettingsRepository.MAX_TERMINAL_FONT_SIZE,
-                                    cursorColor =
-                                        ghosttyTheme?.cursorColor
-                                            ?: Color.White.copy(alpha = 0.28f),
-                                    cursorTextColor = ghosttyTheme?.cursorText,
-                                    selectionBackgroundColor =
-                                        ghosttyTheme?.selectionBackground
-                                            ?: colors.accent.copy(alpha = 0.45f),
-                                    selectionForegroundColor =
-                                        ghosttyTheme?.selectionForeground ?: colors.onAccent,
-                                    selection = selection,
-                                    onSelectionChange = { selection = it },
-                                    terminalHandle = sessionState.handle,
-                                    modifier = Modifier.fillMaxSize(),
-                                    onResize = vm::onCanvasSizeChanged,
-                                    onTap = requestInputFocus,
-                                    onPrimaryClick = vm::onPrimaryMouseClick,
-                                    onAppSelectionDrag = vm::onAppSelectionDrag,
-                                    onScroll = vm::onScroll,
-                                    onFontSizeChange = { sizeSp -> terminalFontSizeSp = sizeSp },
-                                    onSelectionChanged = { state -> selectionState = state },
-                                )
+                                LatestSnapshot(vm.sessionState) { snapshot ->
+                                    TerminalCanvas(
+                                        snapshot = snapshot,
+                                        fontSizeSp = terminalFontSizeSp,
+                                        minFontSizeSp = SettingsRepository.MIN_TERMINAL_FONT_SIZE,
+                                        maxFontSizeSp = SettingsRepository.MAX_TERMINAL_FONT_SIZE,
+                                        cursorColor =
+                                            ghosttyTheme?.cursorColor
+                                                ?: Color.White.copy(alpha = 0.28f),
+                                        cursorTextColor = ghosttyTheme?.cursorText,
+                                        selectionBackgroundColor =
+                                            ghosttyTheme?.selectionBackground
+                                                ?: colors.accent.copy(alpha = 0.45f),
+                                        selectionForegroundColor =
+                                            ghosttyTheme?.selectionForeground ?: colors.onAccent,
+                                        selection = selection,
+                                        onSelectionChange = { selection = it },
+                                        terminalHandle = sessionState.handle,
+                                        modifier = Modifier.fillMaxSize(),
+                                        onResize = vm::onCanvasSizeChanged,
+                                        onTap = requestInputFocus,
+                                        onPrimaryClick = vm::onPrimaryMouseClick,
+                                        onAppSelectionDrag = vm::onAppSelectionDrag,
+                                        onScroll = vm::onScroll,
+                                        onFontSizeChange = { sizeSp -> terminalFontSizeSp = sizeSp },
+                                        onSelectionChanged = { state -> selectionState = state },
+                                    )
+                                }
 
                                 Row(
                                     modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),

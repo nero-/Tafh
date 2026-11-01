@@ -102,19 +102,27 @@ class TerminalInputView(context: Context) : EditText(context) {
      * Drops stale IME mirror state before a virtual key is delivered straight to the terminal, so
      * the IME cannot replay text the terminal already received.
      *
-     * Only the mirror (composing spans, text, selection) is touched: nothing is remembered, no time
-     * window is armed and the IME is never restarted, so every later IME edit stays authoritative.
-     * Accessory keys repeat rapidly, and a restart there would both hammer the IME and discard its
-     * composing state.
+     * Nothing is remembered and no time window is armed, so every later IME edit stays
+     * authoritative. The IME is restarted only when a composition was live: accessory keys repeat
+     * rapidly, and restarting on each one would hammer the IME for no reason.
      */
     fun armInputSuppression(reason: String) {
         if (DEBUG_INPUT_LOGS) logInput("armSuppression reason=$reason")
         val connection = activeInputConnection
         if (connection != null) {
-            connection.dropMirror("armInputSuppression")
+            connection.invalidateImeMirror()
         } else {
             clearMirrorBuffer("armInputSuppression")
         }
+    }
+
+    /**
+     * Makes the IME forget a composition the terminal has moved past. Without this the IME would
+     * keep editing that word, and its next update would rewrite text the shell already acted on.
+     */
+    private fun restartImeAfterAbandonedComposition() {
+        val imm = inputMethodManager ?: context.getSystemService(InputMethodManager::class.java)
+        imm?.restartInput(this)
     }
 
     /** Empties the IME mirror without emitting anything to the terminal. */
@@ -220,25 +228,29 @@ class TerminalInputView(context: Context) : EditText(context) {
     /**
      * IME translation state machine.
      *
-     * The mirror [Editable] is empty whenever no composition is active: it holds exactly the
-     * uncommitted composing region and never retained committed text. The terminal is the only
-     * owner of committed input, so every IME callback is interpreted from that invariant instead of
-     * from a before/after diff:
-     * - [commitText] emits the committed characters once and clears the mirror.
-     * - [setComposingText] only updates the mirror and emits nothing.
-     * - [deleteSurroundingText] is authoritative: deletes aimed at the composing region are
-     *   cancelled locally, the rest become [0x7f] / `ESC [ 3 ~`.
+     * The terminal, not the IME, owns the line being edited, so composing text is sent live:
+     * keyboards such as Gboard and Samsung compose every word, and holding the composition back
+     * until commit left typing, backspace and space invisible until the keyboard was closed. The
+     * mirror [Editable] holds only the active composition, which is always exactly what the
+     * terminal last received for it ([sentComposition]); committed text is never retained.
+     * - [setComposingText] and [commitText] diff the new text against [sentComposition] and emit
+     *   only the difference (backspaces, then the new tail), so autocorrect and CJK conversion
+     *   rewrite the word in place instead of appending a second copy.
+     * - [finishComposingText] emits nothing: the composition is already on the terminal.
+     * - [deleteSurroundingText] follows [BaseInputConnection]: it deletes text outside the
+     *   composition, which becomes `0x7f` per code point before the cursor and `ESC [ 3 ~` per code
+     *   point after it.
      */
     private class TerminalInputConnection(private val view: TerminalInputView) :
         BaseInputConnection(view, true) {
 
         val connectionId: Int = System.identityHashCode(this)
 
-        /**
-         * True while the IME owns an uncommitted composing region in the mirror. The mirror is
-         * empty whenever this is false.
-         */
+        /** True while the IME owns a composing region. The mirror is empty whenever this is false. */
         private var composing = false
+
+        /** Composition text the terminal currently shows; always equal to the mirror. */
+        private var sentComposition = ""
 
         override fun getEditable(): Editable = view.editableText
 
@@ -247,16 +259,28 @@ class TerminalInputView(context: Context) : EditText(context) {
             view.logInput("conn=$connectionId $message")
         }
 
-        /** Drops the mirror and forgets any active composition. Emits nothing. */
+        /**
+         * Treats the active composition as final and empties the mirror. Emits nothing: the
+         * composition already reached the terminal while it was being typed.
+         */
         fun dropMirror(source: String) {
             if (DEBUG_INPUT_LOGS) logConn("dropMirror source=$source composing=$composing")
             composing = false
+            sentComposition = ""
             view.clearMirrorBuffer(source)
         }
 
+        /**
+         * Called before a key reaches the terminal outside the IME (hardware/accessory keys, or
+         * keys the IME sends as events). The terminal moves on from the composition, so the IME
+         * must forget it too: otherwise its next edit would rewrite a word the terminal has already
+         * acted on (e.g. after Tab completion or Enter).
+         */
         fun invalidateImeMirror() {
-            if (DEBUG_INPUT_LOGS) logConn("invalidateImeMirror")
+            if (DEBUG_INPUT_LOGS) logConn("invalidateImeMirror composing=$composing")
+            val hadComposition = composing
             dropMirror("invalidateImeMirror")
+            if (hadComposition) view.restartImeAfterAbandonedComposition()
         }
 
         private fun emitCommittedText(source: String, text: String) {
@@ -265,45 +289,17 @@ class TerminalInputView(context: Context) : EditText(context) {
             view.emitTerminalText(source, text.replace('\n', '\r'))
         }
 
-        // Code points of the mirror on each side of the IME cursor. The mirror holds only
-        // uncommitted text, so these are exactly what the terminal has never seen. Counting code
-        // points (not UTF-16 units) keeps a surrogate pair a single character.
-        private fun composingCodePointsBeforeCursor(): Int {
-            val editable = getEditable()
-            if (editable.isEmpty()) return 0
-            val cursor = Selection.getSelectionStart(editable).coerceIn(0, editable.length)
-            return Character.codePointCount(editable, 0, cursor)
-        }
-
-        private fun composingCodePointsAfterCursor(): Int {
-            val editable = getEditable()
-            if (editable.isEmpty()) return 0
-            val cursor = Selection.getSelectionStart(editable).coerceIn(0, editable.length)
-            return Character.codePointCount(editable, cursor, editable.length)
-        }
-
         /**
-         * Shared delete translation for both IME delete variants.
-         *
-         * Deletes covered by the composition are cancelled locally: the terminal never received
-         * that text, so it must not see bytes for it. Anything beyond the composition is a real
-         * delete, one backspace per code point before the cursor and one `ESC [ 3 ~` per code point
-         * after.
+         * Brings the terminal from [sentComposition] to [next] with the fewest bytes: one backspace
+         * per code point after the shared prefix, then the new tail.
          */
-        private fun emitDelete(source: String, beforeLength: Int, afterLength: Int) {
-            // Only the composing text on the side being deleted can be cancelled. Using the
-            // whole composition length for both directions swallowed a forward delete that
-            // had nothing composed after the cursor.
-            val composedBefore = if (composing) composingCodePointsBeforeCursor() else 0
-            val composedAfter = if (composing) composingCodePointsAfterCursor() else 0
-            val requestedBefore = beforeLength.coerceAtLeast(0)
-            val requestedAfter = afterLength.coerceAtLeast(0)
-            val terminalBefore = requestedBefore - minOf(requestedBefore, composedBefore)
-            val terminalAfter = requestedAfter - minOf(requestedAfter, composedAfter)
-            dropMirror(source)
-
-            repeat(terminalBefore) { view.emitBackspaceText(source) }
-            repeat(terminalAfter) { view.emitTerminalText(source, "\u001b[3~") }
+        private fun replaceComposition(source: String, next: String) {
+            val previous = sentComposition
+            val shared = sharedPrefixLength(previous, next)
+            val erased = Character.codePointCount(previous, shared, previous.length)
+            repeat(erased) { view.emitBackspaceText(source) }
+            emitCommittedText(source, next.substring(shared))
+            sentComposition = next
         }
 
         override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
@@ -313,10 +309,9 @@ class TerminalInputView(context: Context) : EditText(context) {
                     "commitText text=${view.describeText(committed)} cursor=$newCursorPosition composing=$composing"
                 )
             }
-            // A commit supersedes whatever was composing and the mirror must not
-            // keep committed text, so reset it before the text is emitted.
+            // A commit replaces the composition, which the terminal already shows.
+            replaceComposition("commitText", committed)
             dropMirror("commitText")
-            emitCommittedText("commitText", committed)
             return true
         }
 
@@ -327,16 +322,13 @@ class TerminalInputView(context: Context) : EditText(context) {
                     "setComposingText text=${view.describeText(composingText)} cursor=$newCursorPosition"
                 )
             }
-            // An empty composing text cancels the composition: the IME discarded
-            // what it had shown, so nothing may be committed to the terminal.
+            replaceComposition("setComposingText", composingText)
+            // An empty composing text cancels the composition; its text was just erased.
             if (composingText.isEmpty()) {
                 dropMirror("setComposingText.empty")
                 return true
             }
-
-            // Composition is not committed yet: it lives in the mirror only and
-            // the terminal must not see it until the IME commits.
-            dropMirror("setComposingText")
+            view.clearMirrorBuffer("setComposingText")
             val ok = super.setComposingText(composingText, newCursorPosition)
             composing = true
             return ok
@@ -344,28 +336,28 @@ class TerminalInputView(context: Context) : EditText(context) {
 
         override fun finishComposingText(): Boolean {
             if (DEBUG_INPUT_LOGS) logConn("finishComposingText composing=$composing")
-            // Some IMEs commit a composition through finishComposingText instead
-            // of commitText. The pending composition has then become real input
-            // and must be emitted exactly once; after commitText the mirror is
-            // already empty, so this stays silent in the normal
-            // setComposingText -> commitText -> finishComposingText sequence.
-            val pending = if (composing) getEditable().toString() else ""
             val ok = super.finishComposingText()
             dropMirror("finishComposingText")
-            emitCommittedText("finishComposingText", pending)
             return ok
         }
 
         override fun setComposingRegion(start: Int, end: Int): Boolean {
             if (DEBUG_INPUT_LOGS) logConn("setComposingRegion start=$start end=$end")
-            // An empty region leaves no composition behind, so the mirror must not
-            // keep any text: drop it before the region is applied.
-            if (start == end) {
-                dropMirror("setComposingRegion.empty")
+            val editable = getEditable()
+            val regionStart = minOf(start, end).coerceIn(0, editable.length)
+            val regionEnd = maxOf(start, end).coerceIn(0, editable.length)
+            // Only mirror text can be recomposed, and only when the region ends at the terminal
+            // cursor: the terminal can rewrite a word behind the cursor, not one in the middle.
+            if (regionStart == regionEnd || regionEnd != editable.length) {
+                dropMirror("setComposingRegion.unsupported")
                 return true
             }
-            val ok = super.setComposingRegion(start, end)
-            composing = ok && getEditable().isNotEmpty()
+            // Text before the region is final now; it already reached the terminal.
+            editable.delete(0, regionStart)
+            val ok = super.setComposingRegion(0, editable.length)
+            Selection.setSelection(editable, editable.length)
+            composing = true
+            sentComposition = editable.toString()
             return ok
         }
 
@@ -391,6 +383,26 @@ class TerminalInputView(context: Context) : EditText(context) {
                 )
             }
             return extracted
+        }
+
+        /**
+         * Shared delete translation for both IME delete variants.
+         *
+         * Per [BaseInputConnection], the deleted text lies outside the composition. The terminal
+         * cursor sits after the composition, so the composition is erased, the surrounding text
+         * deleted, and the composition typed again; the mirror is unchanged.
+         */
+        private fun emitDelete(source: String, beforeLength: Int, afterLength: Int) {
+            val before = beforeLength.coerceAtLeast(0)
+            val after = afterLength.coerceAtLeast(0)
+            if (before == 0 && after == 0) return
+            val composition = sentComposition
+            val compositionCodePoints = Character.codePointCount(composition, 0, composition.length)
+            repeat(compositionCodePoints) { view.emitBackspaceText(source) }
+            repeat(before) { view.emitBackspaceText(source) }
+            repeat(after) { view.emitTerminalText(source, "\u001b[3~") }
+            emitCommittedText(source, composition)
+            if (!composing) view.clearMirrorBuffer(source)
         }
 
         override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
@@ -459,4 +471,17 @@ class TerminalInputView(context: Context) : EditText(context) {
             return super.sendKeyEvent(event)
         }
     }
+}
+
+/**
+ * Length of the common prefix of [a] and [b] in UTF-16 units, never splitting a surrogate pair, so
+ * the backspaces emitted for the remainder always cover whole code points.
+ */
+internal fun sharedPrefixLength(a: CharSequence, b: CharSequence): Int {
+    val limit = minOf(a.length, b.length)
+    var i = 0
+    while (i < limit && a[i] == b[i]) i++
+    // Stopping right after a high surrogate means the pair differs in its low half.
+    if (i > 0 && Character.isHighSurrogate(a[i - 1])) i--
+    return i
 }

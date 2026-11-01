@@ -16,7 +16,8 @@ import org.robolectric.annotation.Config
  * Robolectric coverage for the IME translation state machine in [TerminalInputView].
  *
  * Every assertion compares the exact character stream handed to the terminal, so a stale mirror
- * cannot silently over-emit backspaces or swallow a delete.
+ * cannot silently over-emit backspaces or swallow a delete, and composing keyboards cannot hide
+ * typing until the keyboard is closed.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -104,15 +105,15 @@ class TerminalInputConnectionTest {
     }
 
     @Test
-    fun `composition is not emitted until it is committed`() {
+    fun `composition is sent live and a matching commit adds nothing`() {
         val conn = connection()
 
         conn.setComposingText("か", 1)
-        assertEquals("", emitted.toString())
+        assertEquals("か", emitted.toString())
         assertEquals("か", mirror())
 
         conn.setComposingText("かん", 1)
-        assertEquals("", emitted.toString())
+        assertEquals("かん", emitted.toString())
         assertEquals("かん", mirror())
 
         conn.commitText("かん", 1)
@@ -121,17 +122,103 @@ class TerminalInputConnectionTest {
     }
 
     @Test
-    fun `deleting inside a composition emits nothing`() {
+    fun `typing a word on a composing keyboard shows every letter immediately`() {
         val conn = connection()
 
-        conn.setComposingText("abc", 1)
-        conn.deleteSurroundingText(1, 0)
-        assertEquals("", emitted.toString())
-        assertEquals("", mirror())
+        // Gboard/Samsung compose each word; the user must see every keystroke.
+        conn.setComposingText("l", 1)
+        assertEquals("l", emitted.toString())
+        conn.setComposingText("ls", 1)
+        assertEquals("ls", emitted.toString())
 
-        // Nothing was committed, so the cancelled text never reached the terminal.
+        // Space commits the word plus the space: only the space is new.
+        conn.commitText("ls ", 1)
+        assertEquals("ls ", emitted.toString())
+    }
+
+    @Test
+    fun `backspace while composing erases the last letter on the terminal`() {
+        val conn = connection()
+
+        conn.setComposingText("lsx", 1)
+        conn.setComposingText("ls", 1)
+
+        assertEquals("lsx\u007f", emitted.toString())
+        assertEquals("ls", mirror())
+    }
+
+    @Test
+    fun `cancelling a composition erases it from the terminal`() {
+        val conn = connection()
+
+        conn.setComposingText("ab", 1)
+        conn.setComposingText("", 1)
+
+        assertEquals("ab\u007f\u007f", emitted.toString())
+        assertEquals("", mirror())
+    }
+
+    @Test
+    fun `autocorrect rewrites only the part of the word that changed`() {
+        val conn = connection()
+
+        conn.setComposingText("teh", 1)
+        conn.commitText("the ", 1)
+
+        assertEquals("teh\u007f\u007fhe ", emitted.toString())
+    }
+
+    @Test
+    fun `conversion replaces the composed reading`() {
+        val conn = connection()
+
+        conn.setComposingText("かん", 1)
+        conn.commitText("感", 1)
+
+        assertEquals("かん\u007f\u007f感", emitted.toString())
+    }
+
+    @Test
+    fun `rewriting an emoji in a composition erases it with one backspace`() {
+        val conn = connection()
+        val grin = "\uD83D\uDE00"
+        val wink = "\uD83D\uDE09"
+
+        conn.setComposingText(grin, 1)
+        conn.commitText(wink, 1)
+
+        assertEquals("$grin\u007f$wink", emitted.toString())
+    }
+
+    @Test
+    fun `deleting during a composition removes the text before it`() {
+        val conn = connection()
+
+        conn.commitText("x", 1)
+        conn.setComposingText("ab", 1)
+        conn.deleteSurroundingText(1, 0)
+
+        // The composition is retyped after the deleted character, and stays composing.
+        assertEquals("xab\u007f\u007f\u007fab", emitted.toString())
+        assertEquals("ab", mirror())
+
         conn.commitText("abc", 1)
-        assertEquals("abc", emitted.toString())
+        assertEquals("xab\u007f\u007f\u007fabc", emitted.toString())
+    }
+
+    @Test
+    fun `a key sent during a composition keeps the composition and is not replayed`() {
+        val conn = connection()
+
+        conn.setComposingText("cd Doc", 1)
+        view.armInputSuppression("tab")
+
+        // The text stays on the terminal for the key (e.g. Tab completion) to act on, and a
+        // later commit does not resend it.
+        assertEquals("cd Doc", emitted.toString())
+        assertEquals("", mirror())
+        conn.commitText("x", 1)
+        assertEquals("cd Docx", emitted.toString())
     }
 
     @Test
@@ -187,29 +274,18 @@ class TerminalInputConnectionTest {
     }
 
     @Test
-    fun `code point delete inside a composition emits nothing`() {
-        val conn = connection()
-
-        conn.setComposingText("\uD83D\uDE00", 1)
-        conn.deleteSurroundingTextInCodePoints(1, 0)
-
-        assertEquals("", emitted.toString())
-        assertEquals("", mirror())
-    }
-
-    @Test
-    fun `finish composing text commits the pending composition once`() {
+    fun `finish composing text emits nothing because the composition is already shown`() {
         val conn = connection()
 
         conn.setComposingText("かん", 1)
-        assertEquals("", emitted.toString())
+        assertEquals("かん", emitted.toString())
 
         conn.finishComposingText()
 
         assertEquals("かん", emitted.toString())
         assertEquals("", mirror())
 
-        // The composition is gone, so a later backspace must not replay it.
+        // The composition is final, so a later backspace is a plain delete.
         conn.deleteSurroundingText(1, 0)
         assertEquals("かん\u007f", emitted.toString())
     }
@@ -240,28 +316,21 @@ class TerminalInputConnectionTest {
     }
 
     @Test
-    fun `forward delete inside a composition is not swallowed`() {
+    fun `forward delete during a composition reaches the terminal`() {
         val conn = connection()
 
-        // Composition with the caret after all three characters: nothing is composed after it,
-        // so a forward delete must still reach the terminal.
         conn.setComposingText("\u304b\u3093", 2)
-        assertEquals("", emitted.toString())
+        assertEquals("\u304b\u3093", emitted.toString())
 
         conn.deleteSurroundingText(0, 1)
-        assertEquals("\u001b[3~", emitted.toString())
+        assertEquals("\u304b\u3093\u007f\u007f\u001b[3~\u304b\u3093", emitted.toString())
     }
 
     @Test
-    fun `backspace inside a composition is cancelled but outside text is not`() {
-        val conn = connection()
-
-        conn.setComposingText("\u304b\u3093", 2)
-        conn.deleteSurroundingText(1, 0)
-        assertEquals("", emitted.toString())
-
-        conn.commitText("ab", 2)
-        conn.deleteSurroundingText(1, 0)
-        assertEquals("ab\u007f", emitted.toString())
+    fun `shared prefix never splits a surrogate pair`() {
+        assertEquals(0, sharedPrefixLength("\uD83D\uDE00", "\uD83D\uDE09"))
+        assertEquals(1, sharedPrefixLength("a\uD83D\uDE00", "a\uD83D\uDE09"))
+        assertEquals(3, sharedPrefixLength("a\uD83D\uDE00", "a\uD83D\uDE00b"))
+        assertEquals(2, sharedPrefixLength("abc", "abd"))
     }
 }
