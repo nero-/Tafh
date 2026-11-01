@@ -1530,7 +1530,9 @@ fun TerminalScreen(
                                         onPrimaryClick = vm::onPrimaryMouseClick,
                                         onAppSelectionDrag = vm::onAppSelectionDrag,
                                         onScroll = vm::onScroll,
-                                        onFontSizeChange = { sizeSp -> terminalFontSizeSp = sizeSp },
+                                        onFontSizeChange = { sizeSp ->
+                                            terminalFontSizeSp = sizeSp
+                                        },
                                         onSelectionChanged = { state -> selectionState = state },
                                     )
                                 }

@@ -246,7 +246,9 @@ class TerminalInputView(context: Context) : EditText(context) {
 
         val connectionId: Int = System.identityHashCode(this)
 
-        /** True while the IME owns a composing region. The mirror is empty whenever this is false. */
+        /**
+         * True while the IME owns a composing region. The mirror is empty whenever this is false.
+         */
         private var composing = false
 
         /** Composition text the terminal currently shows; always equal to the mirror. */
