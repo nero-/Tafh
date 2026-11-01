@@ -947,7 +947,7 @@ internal fun AccessoryLayoutEditorSheet(
                             }
 
                             ChuText(
-                                "long-press a key in preview, then drag to place it where you want.",
+                                "long-press a key in preview, then drag to place it where you want. the first half of the keys forms the top row of the bar, the rest the bottom row.",
                                 style = typography.body,
                                 color = colors.textMuted,
                             )

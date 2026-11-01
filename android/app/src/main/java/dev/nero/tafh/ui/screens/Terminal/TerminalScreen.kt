@@ -47,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,9 +68,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -85,8 +88,10 @@ import dev.nero.tafh.data.repository.SettingsRepository
 import dev.nero.tafh.model.AuthMethod
 import dev.nero.tafh.model.HostProfile
 import dev.nero.tafh.model.Transport
+import dev.nero.tafh.service.terminal.SessionState
 import dev.nero.tafh.service.terminal.SessionStatus
 import dev.nero.tafh.service.terminal.TabSpec
+import dev.nero.tafh.service.terminal.TerminalSnapshot
 import dev.nero.tafh.ui.components.ChuButton
 import dev.nero.tafh.ui.components.ChuButtonVariant
 import dev.nero.tafh.ui.components.ChuDialog
@@ -130,6 +135,8 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -218,6 +225,20 @@ private fun TerminalViewModel.dispatchTextWithModifierState(
             onTextInput(modifierState.applyToText(char.toString()))
         }
     }
+}
+
+/**
+ * Reads the per-frame snapshot in its own recompose scope, so only [content] (the canvas) follows
+ * the terminal's frame rate.
+ */
+@Composable
+private fun LatestSnapshot(
+    sessionState: StateFlow<SessionState>,
+    content: @Composable (TerminalSnapshot) -> Unit,
+) {
+    val state by sessionState.collectAsStateWithLifecycle()
+    val snapshot = state.snapshot ?: return
+    content(snapshot)
 }
 
 @Composable
@@ -436,7 +457,10 @@ fun TerminalScreen(
     modifier: Modifier = Modifier,
     openLocalShell: Boolean = false,
 ) {
-    val sessionState by vm.sessionState.collectAsStateWithLifecycle()
+    // Chrome only: the per-frame snapshot is read by LatestSnapshot around the canvas, so a
+    // keystroke echo repaints the grid without recomposing this whole screen.
+    val sessionChrome by vm.sessionChrome.collectAsStateWithLifecycle()
+    val sessionState = sessionChrome.state
     val hosts by vm.hosts.collectAsStateWithLifecycle()
     val tabs by vm.tabs.collectAsStateWithLifecycle()
     val activeTabId by vm.activeTabId.collectAsStateWithLifecycle()
@@ -949,6 +973,9 @@ fun TerminalScreen(
         }
 
         SessionStatus.Connecting -> {
+            // Closing the tab disposes its engine, which abandons the connection attempt; outside
+            // strip mode the screen then navigates back on its own once the host has no tabs.
+            val cancelConnecting: () -> Unit = { activeTab?.id?.let(vm::closeTab) }
             val hostLabel =
                 if (tabMode == TerminalTabMode.Strip) {
                     activeTab?.spec?.tabLabel?.let { "$it..." } ?: "..."
@@ -969,15 +996,18 @@ fun TerminalScreen(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) {
-                        ChuText("Connecting to $hostLabel", style = typography.body)
+                        TerminalConnectingActions(
+                            hostLabel = hostLabel,
+                            onCancel = cancelConnecting,
+                        )
                     }
                 }
             } else {
-                Column(
+                Box(
                     modifier = screenInsetsModifier.fillMaxSize().padding(16.dp),
-                    verticalArrangement = Arrangement.Center,
+                    contentAlignment = Alignment.Center,
                 ) {
-                    ChuText("Connecting to $hostLabel", style = typography.body)
+                    TerminalConnectingActions(hostLabel = hostLabel, onCancel = cancelConnecting)
                 }
             }
         }
@@ -985,8 +1015,7 @@ fun TerminalScreen(
         SessionStatus.Connected,
         SessionStatus.Reconnecting -> {
             val isReconnecting = sessionState.status == SessionStatus.Reconnecting
-            val snapshot = sessionState.snapshot
-            if (snapshot != null) {
+            if (sessionChrome.hasSnapshot) {
                 var modifierState by
                     rememberSaveable(stateSaver = ModifierStateSaver) {
                         mutableStateOf(ModifierState())
@@ -1487,53 +1516,35 @@ fun TerminalScreen(
                             }
                         } else {
                             Box(modifier = Modifier.weight(1f)) {
-                                TerminalCanvas(
-                                    snapshot = snapshot,
-                                    fontSizeSp = terminalFontSizeSp,
-                                    minFontSizeSp = SettingsRepository.MIN_TERMINAL_FONT_SIZE,
-                                    maxFontSizeSp = SettingsRepository.MAX_TERMINAL_FONT_SIZE,
-                                    cursorColor =
-                                        ghosttyTheme?.cursorColor
-                                            ?: Color.White.copy(alpha = 0.28f),
-                                    cursorTextColor = ghosttyTheme?.cursorText,
-                                    selectionBackgroundColor =
-                                        ghosttyTheme?.selectionBackground
-                                            ?: colors.accent.copy(alpha = 0.45f),
-                                    selectionForegroundColor =
-                                        ghosttyTheme?.selectionForeground ?: colors.onAccent,
-                                    selection = selection,
-                                    onSelectionChange = { selection = it },
-                                    terminalHandle = sessionState.handle,
-                                    modifier = Modifier.fillMaxSize(),
-                                    onResize = vm::onCanvasSizeChanged,
-                                    onTap = requestInputFocus,
-                                    onPrimaryClick = vm::onPrimaryMouseClick,
-                                    onAppSelectionDrag = vm::onAppSelectionDrag,
-                                    onScroll = vm::onScroll,
-                                    onFontSizeChange = { sizeSp -> terminalFontSizeSp = sizeSp },
-                                    onSelectionChanged = { state -> selectionState = state },
-                                )
-
-                                Row(
-                                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    if (isReconnecting) {
-                                        ChuText(
-                                            text =
-                                                "Reconnecting${sessionState.reconnectAttempt.takeIf { it > 0 }?.let { " ($it)" } ?: ""}",
-                                            style = typography.labelSmall,
-                                            color = colors.error,
-                                        )
-                                    }
-                                    if (pwdText != null) {
-                                        ChuText(
-                                            text = pwdText,
-                                            style = typography.labelSmall,
-                                            color = colors.textPrimary.copy(alpha = 0.7f),
-                                        )
-                                    }
+                                LatestSnapshot(vm.sessionState) { snapshot ->
+                                    TerminalCanvas(
+                                        snapshot = snapshot,
+                                        fontSizeSp = terminalFontSizeSp,
+                                        minFontSizeSp = SettingsRepository.MIN_TERMINAL_FONT_SIZE,
+                                        maxFontSizeSp = SettingsRepository.MAX_TERMINAL_FONT_SIZE,
+                                        cursorColor =
+                                            ghosttyTheme?.cursorColor
+                                                ?: Color.White.copy(alpha = 0.28f),
+                                        cursorTextColor = ghosttyTheme?.cursorText,
+                                        selectionBackgroundColor =
+                                            ghosttyTheme?.selectionBackground
+                                                ?: colors.accent.copy(alpha = 0.45f),
+                                        selectionForegroundColor =
+                                            ghosttyTheme?.selectionForeground ?: colors.onAccent,
+                                        selection = selection,
+                                        onSelectionChange = { selection = it },
+                                        terminalHandle = sessionState.handle,
+                                        modifier = Modifier.fillMaxSize(),
+                                        onResize = vm::onCanvasSizeChanged,
+                                        onTap = requestInputFocus,
+                                        onPrimaryClick = vm::onPrimaryMouseClick,
+                                        onAppSelectionDrag = vm::onAppSelectionDrag,
+                                        onScroll = vm::onScroll,
+                                        onFontSizeChange = { sizeSp ->
+                                            terminalFontSizeSp = sizeSp
+                                        },
+                                        onSelectionChanged = { state -> selectionState = state },
+                                    )
                                 }
 
                                 val selState = selectionState
@@ -1900,16 +1911,40 @@ fun TerminalScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
                         if (selectedTab == ConnectionTab.Terminal) {
-                            if (activeHostCount > 1 && currentHostName != null) {
+                            // Status line between the terminal and the keys. The directory and
+                            // reconnect state used to float over the terminal's top-right corner,
+                            // covering whatever the program drew there (htop's meters, vim's tabs).
+                            val hostLabelText = currentHostName?.takeIf { activeHostCount > 1 }
+                            if (isReconnecting || pwdText != null || hostLabelText != null) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                                    horizontalArrangement = Arrangement.End,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
+                                    if (isReconnecting) {
+                                        ChuText(
+                                            text = reconnectingLabel(sessionState.reconnectAttempt),
+                                            style = typography.labelSmall,
+                                            color = colors.error,
+                                            modifier = PoliteLiveRegion,
+                                        )
+                                    }
                                     ChuText(
-                                        text = currentHostName,
+                                        text = pwdText?.let(::compactStatusPath).orEmpty(),
                                         style = typography.labelSmall,
-                                        color = colors.textMuted.copy(alpha = 0.7f),
+                                        color = colors.textMuted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
                                     )
+                                    if (hostLabelText != null) {
+                                        ChuText(
+                                            text = hostLabelText,
+                                            style = typography.labelSmall,
+                                            color = colors.textMuted.copy(alpha = 0.7f),
+                                            maxLines = 1,
+                                        )
+                                    }
                                 }
                             }
                             localShellFilesMessage?.let { message ->
@@ -2184,6 +2219,64 @@ private fun TerminalNoSessionsActions(onNewConnection: () -> Unit) {
             bracketed = true,
         ) {
             ChuText("+ new connection", style = typography.label, color = colors.accent)
+        }
+    }
+}
+
+/**
+ * Shortens a deep working directory to its last two folders, so the status line keeps the part that
+ * changes as you `cd` instead of truncating it away.
+ */
+internal fun compactStatusPath(path: String): String {
+    val segments = path.trimEnd('/').split('/').filter { it.isNotEmpty() }
+    if (segments.size <= 3) return path
+    return "…/" + segments.takeLast(2).joinToString("/")
+}
+
+/** Announces changes to screen readers without interrupting them. */
+private val PoliteLiveRegion = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+
+private fun reconnectingLabel(attempt: Int): String =
+    if (attempt > 0) "Reconnecting ($attempt)" else "Reconnecting"
+
+/** Frames of the connecting spinner; ASCII so every bundled terminal font draws it. */
+private val CONNECTING_SPINNER_FRAMES = listOf("|", "/", "-", "\\")
+private const val CONNECTING_SPINNER_FRAME_MS = 120L
+
+@Composable
+private fun TerminalConnectingActions(hostLabel: String, onCancel: () -> Unit) {
+    val colors = ChuColors.current
+    val typography = ChuTypography.current
+    var frame by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(CONNECTING_SPINNER_FRAME_MS)
+            frame = (frame + 1) % CONNECTING_SPINNER_FRAMES.size
+        }
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ChuText(
+                CONNECTING_SPINNER_FRAMES[frame],
+                style = typography.body,
+                color = colors.accent,
+                // The spinner is decorative; the text says what is happening.
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            ChuText(
+                "Connecting to $hostLabel",
+                style = typography.body,
+                modifier = PoliteLiveRegion,
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        ChuButton(
+            onClick = onCancel,
+            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
+            variant = ChuButtonVariant.Outlined,
+        ) {
+            ChuText("Cancel", style = typography.label)
         }
     }
 }

@@ -12,14 +12,14 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,16 +29,21 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nero.tafh.ui.components.ChuButton
@@ -54,16 +59,90 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val INITIAL_REPEAT_DELAY_MS = 400L
 private const val REPEAT_INTERVAL_MS = 50L
 
-/**
- * Width of each accessory key's invisible touch area.
- *
- * The accessibility minimum is 48dp, but the bar packs up to 13 keys into two FlowRow lines on a
- * narrow (folded) screen. Forcing 48dp width overflows the row and drops the trailing keys off the
- * layout entirely, which is worse than a slightly narrow target; height still reaches 48dp.
- */
-private val ACCESSORY_TOUCH_WIDTH: Dp = 44.dp
+/** Height of the drawn key; every key still gets a 48dp-tall touch target around it. */
+private val KEY_HEIGHT: Dp = 30.dp
 
-@OptIn(ExperimentalLayoutApi::class)
+/** Gap between neighbouring keys. */
+private val KEY_GAP: Dp = 4.dp
+
+/** Extra space separating the terminal keys from the app buttons (⌘, files, settings). */
+private val BLOCK_GAP: Dp = 10.dp
+
+/**
+ * Narrowest key before the bar scrolls instead of shrinking further. Below this even a three-letter
+ * label becomes too small to read on a folded phone.
+ */
+internal val MIN_KEY_WIDTH: Dp = 34.dp
+
+/** Widest key: on an unfolded or landscape screen, wider keys only spread the bar out. */
+internal val MAX_KEY_WIDTH: Dp = 72.dp
+
+/** Space kept between a key's label and its border. */
+private val KEY_LABEL_PADDING: Dp = 3.dp
+
+/** Average glyph advance of the bundled monospace fonts, in em, with a little slack. */
+private const val MONO_ADVANCE_EM = 0.62f
+
+/** Smallest label the bar shrinks to before it starts scrolling instead. */
+private const val MIN_LABEL_SP = 9f
+
+private val APP_GLYPH_SIZE = 16.sp
+
+/** Buttons that belong to the app rather than to the terminal; always shown after the keys. */
+private enum class AppButton {
+    TafhKey,
+    Files,
+    Settings,
+}
+
+/**
+ * Splits [items] into at most [rowCount] rows of equal length (the last may be shorter), keeping
+ * their order: the first half of the layout is the top row, the rest the bottom row.
+ *
+ * Every row has the same number of columns no matter how wide the screen is, so folding or rotating
+ * the device only resizes the keys; it never moves a key to another row.
+ */
+internal fun <T> splitIntoRows(items: List<T>, rowCount: Int): List<List<T>> {
+    if (items.isEmpty()) return emptyList()
+    val rows = rowCount.coerceAtLeast(1)
+    val perRow = (items.size + rows - 1) / rows
+    return items.chunked(perRow)
+}
+
+/**
+ * Width of one key when [columns] equal keys and [gaps] of spacing share [available] width, capped
+ * at [MAX_KEY_WIDTH]. A result below [MIN_KEY_WIDTH] means the keys do not fit and the bar scrolls.
+ */
+internal fun accessoryKeyWidth(available: Dp, columns: Int, gaps: Dp): Dp {
+    if (columns <= 0) return MAX_KEY_WIDTH
+    return ((available - gaps) / columns).coerceAtMost(MAX_KEY_WIDTH)
+}
+
+/**
+ * Label size that fits a label of [longestLabelLength] characters in a [keyWidth] key. One size is
+ * used for the whole bar so neighbouring keys never mix label sizes.
+ */
+internal fun fittedLabelSize(
+    longestLabelLength: Int,
+    keyWidth: Dp,
+    fontScale: Float,
+    maxSp: Float,
+): TextUnit {
+    val chars = longestLabelLength.coerceAtLeast(1)
+    val textWidthDp = keyWidth.value - 2 * KEY_LABEL_PADDING.value
+    // Width is in dp; labels are in sp, which the user's font scale enlarges.
+    val fitSp = textWidthDp / (chars * MONO_ADVANCE_EM) / fontScale.coerceAtLeast(0.1f)
+    return fitSp.coerceIn(MIN_LABEL_SP, maxSp).sp
+}
+
+/**
+ * The terminal's extra-key bar: keys in a grid of equal-width columns, then the app buttons.
+ *
+ * The grid replaces a FlowRow that wrapped wherever the width ran out, so folding or rotating the
+ * device re-flowed keys between rows, the rows never lined up, and keys past the second row were
+ * silently dropped. Now each row holds a fixed half of the layout, keys resize to fill the width,
+ * and when even the narrowest keys do not fit the bar scrolls instead of losing keys.
+ */
 @Composable
 fun KeyboardAccessoryBar(
     entries: List<ResolvedAccessoryEntry>,
@@ -80,10 +159,23 @@ fun KeyboardAccessoryBar(
     verticalPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
-    val buttonHeight = 30.dp
-    val buttonPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 3.dp, bottom = 3.dp)
+    val typography = ChuTypography.current
     var expandedGroupId by remember { mutableStateOf<String?>(null) }
-    val onChildAction: (AccessoryAction) -> Unit = { action -> onAction(action) }
+    val rowCount = if (useSingleRow) 1 else 2
+    val appButtons =
+        listOfNotNull(
+            AppButton.TafhKey.takeIf { onTafhKey != null },
+            AppButton.Files.takeIf { onOpenFiles != null },
+            AppButton.Settings.takeIf { onSettings != null },
+        )
+    val keyRows = splitIntoRows(entries, rowCount)
+    // With two rows the app buttons sit as a 2x2 block whose empty corner is top right, so ⌘ lines
+    // up above files and the bottom row ends at settings.
+    val appRows =
+        if (rowCount == 1 || appButtons.size <= 1) listOf(appButtons)
+        else listOf(appButtons.take(appButtons.size - 2), appButtons.takeLast(2))
+    val keyColumns = keyRows.maxOfOrNull { it.size } ?: 0
+    val appColumns = appRows.maxOf { it.size }
 
     Column(modifier = modifier) {
         expandedGroupId?.let { groupId ->
@@ -94,104 +186,111 @@ fun KeyboardAccessoryBar(
                 GroupPopover(
                     group = expandedGroup.group,
                     modifierState = modifierState,
-                    onAction = onChildAction,
-                    buttonHeight = buttonHeight,
-                    buttonPadding = buttonPadding,
+                    onAction = onAction,
                     horizontalPadding = horizontalPadding,
                 )
             }
         }
 
-        if (useSingleRow) {
-            Row(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .padding(horizontal = horizontalPadding, vertical = verticalPadding)
-                        .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                entries.forEach { entry ->
-                    AccessoryEntry(
-                        entry = entry,
-                        expanded = expandedGroupId == entry.id,
-                        modifierState = modifierState,
-                        onAction = onAction,
-                        onToggleGroup = { id ->
-                            expandedGroupId = if (expandedGroupId == id) null else id
-                        },
-                        buttonHeight = buttonHeight,
-                        buttonPadding = buttonPadding,
-                    )
-                }
-                FilesButton(
-                    onTafhKey = onTafhKey,
-                    tafhKeyActive = tafhKeyActive,
-                    onOpenFiles = onOpenFiles,
-                    buttonHeight = buttonHeight,
-                    buttonPadding = buttonPadding,
-                )
-                SettingsButton(
-                    onSettings = onSettings,
-                    buttonHeight = buttonHeight,
-                    buttonPadding = buttonPadding,
-                )
-            }
-            return
-        }
-
-        // Every key draws a 30dp pill but carries a 48dp touch target, so each row occupies 48dp
-        // (30dp pill + 9dp invisible padding above and below). The glyphs and their gaps are
-        // unchanged; only the invisible padding makes the bar taller.
-        //
-        // The ⌘/⚙ actions live OUTSIDE the FlowRow on purpose: FlowRow silently drops items that
-        // do not fit within maxLines, and these two are the only in-terminal route to the file
-        // browser and settings, so they must never be the ones that disappear.
-        Row(
+        BoxWithConstraints(
             modifier =
                 Modifier.fillMaxWidth()
-                    .padding(horizontal = horizontalPadding, vertical = verticalPadding),
-            verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = horizontalPadding, vertical = verticalPadding)
         ) {
-            FlowRow(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                maxLines = 2,
-            ) {
-                entries.forEach { entry ->
-                    AccessoryEntry(
-                        entry = entry,
-                        expanded = expandedGroupId == entry.id,
-                        modifierState = modifierState,
-                        onAction = onAction,
-                        onToggleGroup = { id ->
-                            expandedGroupId = if (expandedGroupId == id) null else id
-                        },
-                        buttonHeight = buttonHeight,
-                        buttonPadding = buttonPadding,
-                    )
-                }
-            }
+            val keyGapCount = (keyColumns - 1).coerceAtLeast(0) + (appColumns - 1).coerceAtLeast(0)
+            val blockGap = if (keyColumns > 0 && appColumns > 0) BLOCK_GAP else 0.dp
+            val gaps = KEY_GAP * keyGapCount + blockGap
+            val fittedWidth = accessoryKeyWidth(maxWidth, keyColumns + appColumns, gaps)
+            val scrolls = fittedWidth < MIN_KEY_WIDTH
+            val keyWidth = if (scrolls) MIN_KEY_WIDTH else fittedWidth
+            val longestLabel = entries.maxOfOrNull { it.label.length } ?: 1
+            val labelStyle =
+                typography.label.copy(
+                    fontSize =
+                        fittedLabelSize(
+                            longestLabelLength = longestLabel,
+                            keyWidth = keyWidth,
+                            fontScale = LocalDensity.current.fontScale,
+                            maxSp = typography.label.fontSize.value,
+                        )
+                )
+            val cell =
+                KeyCell(
+                    width = keyWidth,
+                    labelStyle = labelStyle,
+                    contentPadding = PaddingValues(horizontal = KEY_LABEL_PADDING),
+                )
+
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    if (scrolls) Modifier.horizontalScroll(rememberScrollState())
+                    else Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    if (scrolls) Arrangement.spacedBy(BLOCK_GAP) else Arrangement.SpaceBetween,
+                // A single app-button row lines up with the bottom key row.
+                verticalAlignment = Alignment.Bottom,
             ) {
-                FilesButton(
-                    onTafhKey = onTafhKey,
-                    tafhKeyActive = tafhKeyActive,
-                    onOpenFiles = onOpenFiles,
-                    buttonHeight = buttonHeight,
-                    buttonPadding = buttonPadding,
-                )
-                SettingsButton(
-                    onSettings = onSettings,
-                    buttonHeight = buttonHeight,
-                    buttonPadding = buttonPadding,
-                )
+                Column {
+                    keyRows.forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                            row.forEach { entry ->
+                                AccessoryEntry(
+                                    entry = entry,
+                                    expanded = expandedGroupId == entry.id,
+                                    modifierState = modifierState,
+                                    onAction = onAction,
+                                    onToggleGroup = { id ->
+                                        expandedGroupId = if (expandedGroupId == id) null else id
+                                    },
+                                    cell = cell,
+                                )
+                            }
+                        }
+                    }
+                }
+                Column {
+                    appRows.forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(KEY_GAP)) {
+                            row.forEach { button ->
+                                when (button) {
+                                    AppButton.TafhKey ->
+                                        TafhKeyButton(
+                                            onClick = onTafhKey ?: {},
+                                            active = tafhKeyActive,
+                                            cell = cell,
+                                        )
+                                    AppButton.Files -> FilesButton(onOpenFiles ?: {}, cell)
+                                    AppButton.Settings -> SettingsButton(onSettings ?: {}, cell)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+/**
+ * Size and label style shared by every key in the bar. A null [width] lets a key wrap its label.
+ */
+private data class KeyCell(
+    val width: Dp?,
+    val labelStyle: TextStyle,
+    val contentPadding: PaddingValues,
+) {
+    fun modifier(): Modifier = if (width != null) Modifier.width(width) else Modifier
+}
+
+@Composable
+private fun KeyLabel(text: String, cell: KeyCell, color: Color) {
+    ChuText(
+        text,
+        style = cell.labelStyle,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Clip,
+    )
 }
 
 @Composable
@@ -199,11 +298,16 @@ private fun GroupPopover(
     group: AccessoryKeyGroup,
     modifierState: ModifierState,
     onAction: (AccessoryAction) -> Unit,
-    buttonHeight: Dp,
-    buttonPadding: PaddingValues,
     horizontalPadding: Dp,
 ) {
     val colors = ChuColors.current
+    val typography = ChuTypography.current
+    val cell =
+        KeyCell(
+            width = null,
+            labelStyle = typography.label,
+            contentPadding = PaddingValues(horizontal = 10.dp),
+        )
     AnimatedVisibility(
         visible = true,
         enter = fadeIn() + expandVertically(),
@@ -224,8 +328,7 @@ private fun GroupPopover(
                     item = child,
                     modifierState = modifierState,
                     onAction = onAction,
-                    buttonHeight = buttonHeight,
-                    buttonPadding = buttonPadding,
+                    cell = cell,
                 )
             }
         }
@@ -239,8 +342,7 @@ private fun AccessoryEntry(
     modifierState: ModifierState,
     onAction: (AccessoryAction) -> Unit,
     onToggleGroup: (String) -> Unit,
-    buttonHeight: Dp,
-    buttonPadding: PaddingValues,
+    cell: KeyCell,
 ) {
     when (entry) {
         is ResolvedAccessoryEntry.Single ->
@@ -248,16 +350,14 @@ private fun AccessoryEntry(
                 item = entry.item,
                 modifierState = modifierState,
                 onAction = onAction,
-                buttonHeight = buttonHeight,
-                buttonPadding = buttonPadding,
+                cell = cell,
             )
         is ResolvedAccessoryEntry.Group ->
             GroupButton(
                 group = entry.group,
                 expanded = expanded,
                 onToggle = { onToggleGroup(entry.group.id) },
-                buttonHeight = buttonHeight,
-                buttonPadding = buttonPadding,
+                cell = cell,
             )
     }
 }
@@ -267,24 +367,19 @@ private fun GroupButton(
     group: AccessoryKeyGroup,
     expanded: Boolean,
     onToggle: () -> Unit,
-    buttonHeight: Dp,
-    buttonPadding: PaddingValues,
+    cell: KeyCell,
 ) {
     val colors = ChuColors.current
-    val typography = ChuTypography.current
     ChuButton(
         onClick = onToggle,
+        modifier = cell.modifier(),
         variant = if (expanded) ChuButtonVariant.Filled else ChuButtonVariant.Outlined,
         // Drawn key stays 30dp; ChuButton expands the touch target to 48dp.
-        minHeight = buttonHeight,
-        minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
-        contentPadding = buttonPadding,
+        minHeight = KEY_HEIGHT,
+        minTouchTargetWidth = MIN_KEY_WIDTH,
+        contentPadding = cell.contentPadding,
     ) {
-        ChuText(
-            group.label,
-            style = typography.label,
-            color = if (expanded) colors.onAccent else colors.textPrimary,
-        )
+        KeyLabel(group.label, cell, if (expanded) colors.onAccent else colors.textPrimary)
     }
 }
 
@@ -293,85 +388,80 @@ private fun AccessoryButton(
     item: AccessoryKeyItem,
     modifierState: ModifierState,
     onAction: (AccessoryAction) -> Unit,
-    buttonHeight: Dp,
-    buttonPadding: PaddingValues,
+    cell: KeyCell,
 ) {
-    val typography = ChuTypography.current
+    val colors = ChuColors.current
     val toggleModifier = (item.action as? AccessoryAction.ToggleModifier)?.modifier
     if (toggleModifier != null) {
         ToggleButton(
             label = item.label,
             enabled = modifierState.isEnabled(toggleModifier),
             onClick = { onAction(item.action) },
-            buttonHeight = buttonHeight,
-            contentPadding = buttonPadding,
+            cell = cell,
         )
-    } else {
-        val specialKey = (item.action as? AccessoryAction.SendSpecialKey)?.key
-        if (specialKey != null && specialKey.isRepeatable) {
-            RepeatableAccessoryButton(
-                item = item,
-                onAction = onAction,
-                buttonHeight = buttonHeight,
-                buttonPadding = buttonPadding,
-            )
-        } else {
-            ChuButton(
-                onClick = { onAction(item.action) },
-                variant = ChuButtonVariant.Outlined,
-                // 30dp drawn key centered in ChuButton's 48dp touch target.
-                minHeight = buttonHeight,
-                minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
-                contentPadding = buttonPadding,
-            ) {
-                ChuText(item.label, style = typography.label)
-            }
-        }
+        return
+    }
+    val specialKey = (item.action as? AccessoryAction.SendSpecialKey)?.key
+    if (specialKey != null && specialKey.isRepeatable) {
+        RepeatableAccessoryButton(item = item, onAction = onAction, cell = cell)
+        return
+    }
+    ChuButton(
+        onClick = { onAction(item.action) },
+        modifier = cell.modifier(),
+        variant = ChuButtonVariant.Outlined,
+        // 30dp drawn key centered in ChuButton's 48dp touch target.
+        minHeight = KEY_HEIGHT,
+        minTouchTargetWidth = MIN_KEY_WIDTH,
+        contentPadding = cell.contentPadding,
+    ) {
+        KeyLabel(item.label, cell, colors.textPrimary)
     }
 }
 
 @Composable
-private fun FilesButton(
-    onTafhKey: (() -> Unit)?,
-    tafhKeyActive: Boolean,
-    onOpenFiles: (() -> Unit)?,
-    buttonHeight: Dp,
-    buttonPadding: PaddingValues,
-) {
+private fun TafhKeyButton(onClick: () -> Unit, active: Boolean, cell: KeyCell) {
     val colors = ChuColors.current
-    val typography = ChuTypography.current
-    if (onTafhKey != null) {
-        ChuButton(
-            onClick = onTafhKey,
-            variant = if (tafhKeyActive) ChuButtonVariant.Filled else ChuButtonVariant.Outlined,
-            minHeight = buttonHeight,
-            minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
-            contentPadding = buttonPadding,
-        ) {
-            ChuText(
-                "⌘",
-                style = typography.label,
-                color = if (tafhKeyActive) colors.onAccent else colors.textPrimary,
-            )
-        }
-    }
-    if (onOpenFiles == null) return
     ChuButton(
-        onClick = onOpenFiles,
-        variant = ChuButtonVariant.Outlined,
-        minHeight = buttonHeight,
-        minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
-        contentPadding = buttonPadding,
+        onClick = onClick,
+        modifier = cell.modifier().semantics { stateDescription = if (active) "on" else "off" },
+        variant = if (active) ChuButtonVariant.Filled else ChuButtonVariant.Outlined,
+        minHeight = KEY_HEIGHT,
+        minTouchTargetWidth = MIN_KEY_WIDTH,
+        contentPadding = cell.contentPadding,
+        contentDescription = "Tafh key",
     ) {
         ChuText(
-            text = "",
+            "⌘",
+            style = ChuTypography.current.label,
+            color = if (active) colors.onAccent else colors.textPrimary,
+        )
+    }
+}
+
+@Composable
+private fun FilesButton(onClick: () -> Unit, cell: KeyCell) {
+    val colors = ChuColors.current
+    val typography = ChuTypography.current
+    ChuButton(
+        onClick = onClick,
+        modifier = cell.modifier(),
+        variant = ChuButtonVariant.Outlined,
+        minHeight = KEY_HEIGHT,
+        minTouchTargetWidth = MIN_KEY_WIDTH,
+        contentPadding = cell.contentPadding,
+        contentDescription = "Files",
+    ) {
+        // Folder glyph from the bundled symbols font (a private-use code point).
+        ChuText(
+            text = "",
             style =
                 TextStyle(
                     fontFamily = ChuSymbolsFontFamily,
                     fontWeight = typography.label.fontWeight,
                     fontStyle = typography.label.fontStyle,
-                    fontSize = 16.sp,
-                    lineHeight = 16.sp,
+                    fontSize = APP_GLYPH_SIZE,
+                    lineHeight = APP_GLYPH_SIZE,
                 ),
             color = colors.textPrimary,
         )
@@ -379,21 +469,17 @@ private fun FilesButton(
 }
 
 @Composable
-private fun SettingsButton(
-    onSettings: (() -> Unit)?,
-    buttonHeight: Dp,
-    buttonPadding: PaddingValues,
-) {
-    val typography = ChuTypography.current
-    if (onSettings == null) return
+private fun SettingsButton(onClick: () -> Unit, cell: KeyCell) {
     ChuButton(
-        onClick = onSettings,
+        onClick = onClick,
+        modifier = cell.modifier(),
         variant = ChuButtonVariant.Outlined,
-        minHeight = buttonHeight,
-        minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
-        contentPadding = buttonPadding,
+        minHeight = KEY_HEIGHT,
+        minTouchTargetWidth = MIN_KEY_WIDTH,
+        contentPadding = cell.contentPadding,
+        contentDescription = "Settings",
     ) {
-        ChuText("⚙", style = typography.label)
+        ChuText("⚙", style = ChuTypography.current.label)
     }
 }
 
@@ -401,10 +487,9 @@ private fun SettingsButton(
 private fun RepeatableAccessoryButton(
     item: AccessoryKeyItem,
     onAction: (AccessoryAction) -> Unit,
-    buttonHeight: Dp,
-    buttonPadding: PaddingValues,
+    cell: KeyCell,
 ) {
-    val typography = ChuTypography.current
+    val colors = ChuColors.current
     val haptics = LocalHapticFeedback.current
     var pressed by remember { mutableStateOf(false) }
     val currentOnAction by rememberUpdatedState(onAction)
@@ -447,47 +532,40 @@ private fun RepeatableAccessoryButton(
                         true
                     }
                 }
-                // 48dp tall touch target; the drawn surface below stays buttonHeight
-                // (30dp). Width is left to the key's own content: forcing 48dp wide
-                // keys overflows the two-row bar and silently drops the trailing
-                // Enter/Space/⌘ keys off the end of the FlowRow.
-                .minimumInteractiveComponentSize(minWidth = 0.dp),
+                // 48dp tall touch target; the drawn surface below stays KEY_HEIGHT (30dp). Width
+                // comes from the grid cell (or the label, in the group popover).
+                .minimumInteractiveComponentSize(minWidth = 0.dp)
+                .then(cell.modifier()),
+        // Forward the cell width to the drawn surface so it fills its grid column.
+        propagateMinConstraints = cell.width != null,
         contentAlignment = Alignment.Center,
     ) {
         ChuButtonSurface(
-            modifier = Modifier.height(buttonHeight),
+            modifier = Modifier.height(KEY_HEIGHT),
             pressed = pressed,
             variant = ChuButtonVariant.Outlined,
-            contentPadding = buttonPadding,
+            contentPadding = cell.contentPadding,
         ) {
-            ChuText(item.label, style = typography.label)
+            KeyLabel(item.label, cell, colors.textPrimary)
         }
     }
 }
 
 @Composable
-private fun ToggleButton(
-    label: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    buttonHeight: Dp,
-    contentPadding: PaddingValues,
-) {
+private fun ToggleButton(label: String, enabled: Boolean, onClick: () -> Unit, cell: KeyCell) {
     val colors = ChuColors.current
-    val typography = ChuTypography.current
-    val activeLabel = if (enabled) "• $label" else label
     ChuButton(
         onClick = onClick,
+        // The fill alone shows the modifier is on: a "• " prefix used to widen the key and shove
+        // its neighbours along the row every time a modifier was toggled.
+        modifier = cell.modifier().semantics { stateDescription = if (enabled) "on" else "off" },
         // 30dp drawn key centered in ChuButton's 48dp touch target.
-        minHeight = buttonHeight,
-        minTouchTargetWidth = ACCESSORY_TOUCH_WIDTH,
-        contentPadding = contentPadding,
+        minHeight = KEY_HEIGHT,
+        minTouchTargetWidth = MIN_KEY_WIDTH,
+        contentPadding = cell.contentPadding,
         variant = if (enabled) ChuButtonVariant.Filled else ChuButtonVariant.Outlined,
     ) {
-        ChuText(
-            activeLabel,
-            style = typography.label,
-            color = if (enabled) colors.onAccent else colors.textSecondary,
-        )
+        // Off reads like every other key (it is not disabled); on is filled with the accent.
+        KeyLabel(label, cell, if (enabled) colors.onAccent else colors.textPrimary)
     }
 }

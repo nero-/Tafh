@@ -332,20 +332,25 @@ object TerminalAccessoryLayoutStore {
     private val compositeGroupById: Map<String, AccessoryKeyGroup> =
         compositeGroups.associateBy { it.id }
 
+    /**
+     * The bar shows the first half of the layout on its top row and the rest below, so the default
+     * is two clusters: escape and the modifiers on top, cursor movement and input underneath, with
+     * Enter in the bottom-right corner where it sits on a keyboard.
+     */
     private val defaultLayoutIds: List<String> =
         listOf(
             "escape",
             "tab",
             "ctrl",
-            "cmd",
-            "shift",
             "alt",
+            "shift",
+            "cmd",
+            "left",
             "up",
             "down",
-            "left",
             "right",
-            "enter",
             "space",
+            "enter",
         )
 
     fun defaultEntries(): List<ResolvedAccessoryEntry> = resolveSelectedLayout(defaultLayoutIds)

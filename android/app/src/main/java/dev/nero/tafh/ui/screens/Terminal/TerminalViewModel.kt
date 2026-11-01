@@ -80,6 +80,16 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
     val activeTabId: StateFlow<String?> = sessionRepository.activeTabId
     val activeTab: StateFlow<TabSession?> = sessionRepository.activeTab
     val sessionState: StateFlow<SessionState> = sessionRepository.sessionState
+
+    /**
+     * [sessionState] without the per-frame snapshot. The screen chrome (tabs, accessory bar,
+     * dialogs) only needs to know a snapshot exists, so it no longer recomposes on every echoed
+     * keystroke; only the canvas follows [sessionState] itself.
+     */
+    val sessionChrome: StateFlow<SessionChrome> =
+        sessionState
+            .map(SessionChrome::of)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SessionChrome.of(sessionState.value))
     val hostKeyPrompt: StateFlow<HostKeyPrompt?> = sessionRepository.hostKeyPrompt
     val hosts: StateFlow<List<HostProfile>> =
         hostRepository.observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -826,6 +836,14 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
                     throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
                 }
             }
+    }
+}
+
+/** [SessionState] with its snapshot dropped; equal across frames that only change the grid. */
+data class SessionChrome(val state: SessionState, val hasSnapshot: Boolean) {
+    companion object {
+        fun of(state: SessionState): SessionChrome =
+            SessionChrome(state = state.copy(snapshot = null), hasSnapshot = state.snapshot != null)
     }
 }
 
